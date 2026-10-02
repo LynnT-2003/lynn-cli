@@ -5,54 +5,33 @@ const AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHT
 const CIPHERS = "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305";
 const TLS13_CIPHERS = "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256";
 
-let curlBinPromise: Promise<string> | null = null;
-async function getCurlExe() {
-  const bins = ["curl_firefox135", "curl_chrome136", "curl-impersonate-chrome", "curl_chrome116", "curl_ff117", "curl"];
-  for (const bin of bins) {
-    try {
-      await execa("sh", ["-c", `command -v ${bin}`]);
-      return bin;
-    } catch {
-      continue;
-    }
-  }
-  return "curl";
-}
+import { gotScraping } from "got-scraping";
 
 async function curl(url: string, extraArgs: string[] = []) {
-  if (!curlBinPromise) curlBinPromise = getCurlExe();
-  const bin = await curlBinPromise;
+  const headers: Record<string, string> = {};
+  for (let i = 0; i < extraArgs.length; i++) {
+    if (extraArgs[i] === "-H" && extraArgs[i+1]) {
+      const parts = extraArgs[i+1].split(":");
+      headers[parts[0].trim()] = parts.slice(1).join(":").trim();
+      i++;
+    } else if (extraArgs[i] === "-e" && extraArgs[i+1]) {
+      headers["referer"] = extraArgs[i+1];
+      i++;
+    }
+  }
 
-  const args = [
-    "-sL",
-    "-A", AGENT,
-    "--max-time", "15",
-    "--ciphers", CIPHERS,
-    "--tls13-ciphers", TLS13_CIPHERS,
-    "-w", " %{http_code}",
-    ...extraArgs,
-    url,
-  ];
-
-  let stdout;
   try {
-    const result = await execa(bin, args);
-    stdout = result.stdout;
+    const { body } = await gotScraping.get(url, { headers, timeout: { request: 15000 } });
+    if (body.toLowerCase().includes("just a moment")) {
+      throw new Error(`Cloudflare blocked or request failed (HTTP 403)`);
+    }
+    return body;
   } catch (err: any) {
-    if (err.exitCode === 28) {
-      throw new Error(`Connection timed out while reaching hianime.at (took longer than 15s). The site might be down or heavily rate-limiting.`);
+    if (err.response?.statusCode >= 400) {
+      throw new Error(`Cloudflare blocked or request failed (HTTP ${err.response.statusCode})`);
     }
     throw new Error(`Failed to fetch from hianime.at: ${err.message}`);
   }
-
-  const match = stdout.match(/ (\d+)$/);
-  const code = match ? parseInt(match[1]!, 10) : 0;
-  const body = stdout.replace(/ \d+$/, "");
-
-  if (code >= 400 || body.toLowerCase().includes("just a moment")) {
-    throw new Error(`Cloudflare blocked or request failed (HTTP ${code})`);
-  }
-  return body;
 }
 
 export type HianimeResult = { id: string; title: string };
