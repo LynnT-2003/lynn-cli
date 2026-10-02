@@ -128,8 +128,7 @@ scratch/
 test_*.js
 test_*.html
 *.patch
-test.ts
-test-*.ts
+
 curl_chrome*
 curl_firefox*
 curl_safari*
