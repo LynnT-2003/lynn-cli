@@ -9,6 +9,8 @@ import {
 } from "../lib/anilist.js";
 import { Thumbnail } from "../components/Thumbnail.js";
 import { useTerminalSize } from "../lib/useTerminalSize.js";
+import { playEpisode } from "../lib/player.js";
+import { getEntry, saveProgress, markEpisodeCompleted } from "../lib/store.js";
 
 // ── layout constants ──────────────────────────────────────────
 
@@ -65,7 +67,7 @@ type Props = {
 };
 
 type FocusState = {
-  type: 'watch' | 'desc' | 'relation' | 'link' | 'similar';
+  type: 'episodes' | 'desc' | 'relation' | 'link' | 'similar';
   index: number;
 };
 
@@ -74,8 +76,36 @@ export function DetailScreen({ anime, isActive = true, onBack, onWatch, onNaviga
   const [detail, setDetail] = useState<AnilistAnimeDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [focus, setFocus] = useState<FocusState>({ type: 'watch', index: 0 });
+  const [focus, setFocus] = useState<FocusState>({ type: 'episodes', index: 0 });
+  const entryRef = React.useRef(getEntry(anime.id));
   const [expandedDesc, setExpandedDesc] = useState(false);
+  
+  const [playing, setPlaying] = useState(false);
+  const [playStatus, setPlayStatus] = useState("");
+  const [watchResult, setWatchResult] = useState<string | null>(null);
+  
+  const [epPickerOpen, setEpPickerOpen] = useState(false);
+  const [selectedEp, setSelectedEp] = useState(1);
+  const [storeResumeEp, setStoreResumeEp] = useState<number | null>(null);
+  const [storeResumeSec, setStoreResumeSec] = useState<number | null>(null);
+  const [useResume, setUseResume] = useState(true);
+
+  useEffect(() => {
+    const entry = getEntry(anime.id);
+    if (entry) {
+      if (entry.resumeEpisode) {
+        setStoreResumeEp(entry.resumeEpisode);
+        if (entry.positionSeconds > 5) {
+          setStoreResumeSec(entry.positionSeconds);
+        }
+        setSelectedEp(entry.resumeEpisode);
+      } else {
+        setSelectedEp(entry.lastEpisode + 1);
+      }
+    }
+  }, [anime.id]);
+  
+  const activeResumeSec = (selectedEp === storeResumeEp) ? storeResumeSec : null;
 
   useEffect(() => {
     fetchAnimeDetail(anime.id)
@@ -106,6 +136,8 @@ export function DetailScreen({ anime, isActive = true, onBack, onWatch, onNaviga
   const relations = detail?.relations.edges || [];
 
   useInput((input, key) => {
+    if (playing) return;
+
     if (expandedDesc && (key.escape || key.return || key.backspace || input === "b")) {
       setExpandedDesc(false);
       return;
@@ -118,29 +150,37 @@ export function DetailScreen({ anime, isActive = true, onBack, onWatch, onNaviga
 
     if (!detail) return; // Wait for load
 
+    const maxEps = detail.episodes || (detail.nextAiringEpisode ? detail.nextAiringEpisode.episode - 1 : Math.max(selectedEp + 10, 12));
+
     // 2D Navigation Logic
     if (key.rightArrow) {
-      if (focus.type === 'watch') setFocus({ type: 'desc', index: 0 });
-      else if (focus.type === 'link' && focus.index < links.length - 1) setFocus({ type: 'link', index: focus.index + 1 });
-      else if (focus.type === 'similar' && focus.index < similar.length - 1) setFocus({ type: 'similar', index: focus.index + 1 });
+      if (focus.type === 'episodes') {
+        setSelectedEp(e => Math.min(maxEps, e + 1));
+      } else if (focus.type === 'link' && focus.index < links.length - 1) {
+        setFocus({ type: 'link', index: focus.index + 1 });
+      } else if (focus.type === 'similar' && focus.index < similar.length - 1) {
+        setFocus({ type: 'similar', index: focus.index + 1 });
+      }
       return;
     }
 
     if (key.leftArrow) {
-      if (focus.type === 'desc' || focus.type === 'relation') setFocus({ type: 'watch', index: 0 });
-      else if (focus.type === 'link') {
+      if (focus.type === 'episodes') {
+        setSelectedEp(e => Math.max(1, e - 1));
+      } else if (focus.type === 'desc' || focus.type === 'relation') {
+        setFocus({ type: 'episodes', index: 0 });
+      } else if (focus.type === 'link') {
         if (focus.index > 0) setFocus({ type: 'link', index: focus.index - 1 });
-        else setFocus({ type: 'watch', index: 0 });
-      }
-      else if (focus.type === 'similar') {
+        else setFocus({ type: 'episodes', index: 0 });
+      } else if (focus.type === 'similar') {
         if (focus.index > 0) setFocus({ type: 'similar', index: focus.index - 1 });
-        else setFocus({ type: 'watch', index: 0 });
+        else setFocus({ type: 'episodes', index: 0 });
       }
       return;
     }
 
     if (key.downArrow) {
-      if (focus.type === 'watch') {
+      if (focus.type === 'episodes') {
         setFocus({ type: 'desc', index: 0 });
       } else if (focus.type === 'desc') {
         if (relations.length) setFocus({ type: 'relation', index: 0 });
@@ -156,22 +196,71 @@ export function DetailScreen({ anime, isActive = true, onBack, onWatch, onNaviga
     }
 
     if (key.upArrow) {
-      if (focus.type === 'relation') {
+      if (focus.type === 'desc') {
+        setFocus({ type: 'episodes', index: 0 });
+      } else if (focus.type === 'relation') {
         if (focus.index > 0) setFocus({ type: 'relation', index: focus.index - 1 });
         else setFocus({ type: 'desc', index: 0 });
       } else if (focus.type === 'link') {
         if (relations.length) setFocus({ type: 'relation', index: relations.length - 1 });
-        else setFocus({ type: 'watch', index: 0 });
+        else setFocus({ type: 'desc', index: 0 });
       } else if (focus.type === 'similar') {
         if (links.length) setFocus({ type: 'link', index: Math.min(focus.index, links.length - 1) });
         else if (relations.length) setFocus({ type: 'relation', index: relations.length - 1 });
-        else setFocus({ type: 'watch', index: 0 });
+        else setFocus({ type: 'desc', index: 0 });
       }
       return;
     }
 
     if (key.return) {
-      if (focus.type === 'watch') onWatch();
+      if (focus.type === 'episodes') {
+        setPlaying(true);
+        setWatchResult(null);
+        
+        const q = anime.title.english || anime.title.romaji || "";
+        const mEps = detail?.episodes || null;
+        setPlayStatus(`playing ep ${selectedEp} in mpv... close the player to save progress`);
+        
+        playEpisode({
+          query: q,
+          episode: selectedEp,
+          startAt: activeResumeSec ?? 0,
+          onPositionUpdate: (pos, dur) => {
+            saveProgress(
+              { id: anime.id, title: q, cover: anime.coverImage.medium || "", totalEpisodes: mEps, playerQuery: q },
+              selectedEp, pos, dur
+            );
+          }
+        }).then(({ pos, dur, finished }) => {
+          setPlaying(false);
+          entryRef.current = getEntry(anime.id); // Refresh local ref
+          if (finished) {
+            markEpisodeCompleted(
+              { id: anime.id, title: q, cover: anime.coverImage.medium || "", totalEpisodes: mEps, playerQuery: q },
+              selectedEp
+            );
+            setWatchResult(`ep ${selectedEp} completed`);
+            setSelectedEp(selectedEp + 1);
+            setStoreResumeEp(null);
+            setStoreResumeSec(null);
+          } else if (pos > 0) {
+            saveProgress(
+              { id: anime.id, title: q, cover: anime.coverImage.medium || "", totalEpisodes: mEps, playerQuery: q },
+              selectedEp, pos, dur
+            );
+            const m = Math.floor(pos / 60);
+            const s = Math.floor(pos % 60).toString().padStart(2, '0');
+            setWatchResult(`saved: ep ${selectedEp} at ${m}:${s}`);
+            setStoreResumeEp(selectedEp);
+            setStoreResumeSec(pos);
+          } else {
+            setWatchResult(`ep ${selectedEp} closed`);
+          }
+        }).catch(err => {
+          setPlaying(false);
+          setWatchResult(`Error: ${err.message}`);
+        });
+      }
       else if (focus.type === 'desc') setExpandedDesc(true);
       else if (focus.type === 'link' && links[focus.index]) execa("open", [links[focus.index].url]).catch(() => { });
       else if (focus.type === 'relation' && relations[focus.index]) {
@@ -184,7 +273,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onWatch, onNaviga
     }
 
     if (input === "w") {
-      onWatch();
+      setFocus({ type: 'episodes', index: 0 });
       return;
     }
   }, { isActive });
@@ -296,46 +385,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onWatch, onNaviga
           <Box flexDirection="column" width={44} paddingX={1} borderRight={true} borderStyle="single" borderColor="cyan" borderTop={false} borderBottom={false} borderLeft={false} alignItems="center" paddingTop={1}>
             <Thumbnail url={coverUrl} cols={THUMB_COLS} rows={THUMB_ROWS} />
 
-            <Box marginTop={1}>
-              <Text
-                backgroundColor={isFocused('watch') ? activeBg : undefined}
-                color={isFocused('watch') ? "white" : "greenBright"}
-                bold
-              >
-                {isFocused('watch') ? " ▶ WATCH NOW " : "   WATCH NOW "}
-              </Text>
-            </Box>
-
-            <Box flexDirection="column" marginTop={1} width="100%" paddingX={1}>
-              {d.averageScore != null && (
-                <Text wrap="truncate" color="yellow">SCORE <Text color={scoreColor(d.averageScore)}>★ {d.averageScore}</Text></Text>
-              )}
-              {d.meanScore != null && (
-                <Text wrap="truncate" color="yellow">MEAN  <Text color="cyan">{d.meanScore}</Text></Text>
-              )}
-              {d.popularity != null && (
-                <Text wrap="truncate" color="yellow">POP   <Text color="cyan">{formatNum(d.popularity)}</Text></Text>
-              )}
-              {d.favourites != null && (
-                <Text wrap="truncate" color="yellow">FAV   <Text color="cyan">{formatNum(d.favourites)}</Text></Text>
-              )}
-              <Box marginTop={1} flexDirection="column">
-                {(d.startDate?.year || d.endDate?.year) && (
-                  <Text color="yellow">AIRED</Text>
-                )}
-                {d.startDate?.year && (
-                  <Text dimColor>{fuzzyDate(d.startDate)}</Text>
-                )}
-                {d.endDate?.year && (
-                  <Text dimColor>to {fuzzyDate(d.endDate)}</Text>
-                )}
-                {d.isAdult && (
-                  <Box marginTop={1}>
-                    <Text bold color="red" inverse> ⚠ 18+ ADULT </Text>
-                  </Box>
-                )}
-              </Box>
-            </Box>
+            
           </Box>
 
           {/* RIGHT COLUMN */}
@@ -355,6 +405,65 @@ export function DetailScreen({ anime, isActive = true, onBack, onWatch, onNaviga
               >
                 {description || "NO SYNOPSIS AVAILABLE."}
               </Text>
+            </Box>
+
+            {/* ── EPISODES GRID ── */}
+            <Box flexDirection="column" marginBottom={1} flexShrink={0}>
+              <Box flexDirection="row" justifyContent="space-between">
+                <Text color="yellow" bold>EPISODES</Text>
+                {d.episodes && <Text dimColor>{d.episodes} total</Text>}
+              </Box>
+              
+              <Box 
+                flexDirection="row" 
+                flexWrap="wrap" 
+                borderStyle={isFocused('episodes') ? "round" : "single"}
+                borderColor={isFocused('episodes') ? "green" : "gray"}
+                paddingX={1}
+              >
+                {(() => {
+                  const maxEps = d.episodes || (d.nextAiringEpisode ? d.nextAiringEpisode.episode - 1 : Math.max(selectedEp + 10, 12));
+                  const CHUNK_SIZE = 50;
+                  const cIdx = Math.floor((selectedEp - 1) / CHUNK_SIZE);
+                  const cStart = cIdx * CHUNK_SIZE + 1;
+                  const cEnd = Math.min(maxEps, cStart + CHUNK_SIZE - 1);
+                  
+                  const eps = [];
+                  for (let i = cStart; i <= cEnd; i++) {
+                    const isFoc = isFocused('episodes') && selectedEp === i;
+                    const isWatched = storeResumeEp ? (i < storeResumeEp) : (i <= (entryRef.current?.lastEpisode || 0));
+                    
+                    let marker = "· ";
+                    let color = "gray";
+                    
+                    if (isFoc) {
+                      marker = "▶ ";
+                      color = "white";
+                    } else if (isWatched) {
+                      marker = "✓ ";
+                      color = "green";
+                    }
+                    
+                    eps.push(
+                      <Box key={i} marginRight={2}>
+                        <Text color={color} bold={isFoc}>{marker}{i}</Text>
+                      </Box>
+                    );
+                  }
+                  
+                  return (
+                    <Box flexDirection="column" width="100%">
+                      <Box flexDirection="row" flexWrap="wrap">{eps}</Box>
+                      {maxEps > CHUNK_SIZE && (
+                        <Box marginTop={1}>
+                          <Text dimColor>Chunk {cIdx + 1} of {Math.ceil(maxEps / CHUNK_SIZE)} (Left/Right to navigate)</Text>
+                        </Box>
+                      )}
+                    </Box>
+                  );
+                })()}
+              </Box>
+              {watchResult && <Text color="green">↳ {watchResult}</Text>}
             </Box>
 
             <Box flexDirection="row" flexGrow={2} overflow="hidden">
@@ -477,6 +586,15 @@ export function DetailScreen({ anime, isActive = true, onBack, onWatch, onNaviga
           )}
         </Box>
       </Box>
+
+      {/* ── PLAYER SPINNER ── */}
+      {playing && (
+        <Box position="absolute" width="100%" height="100%" padding={2} flexDirection="column" justifyContent="center" alignItems="center">
+          <Box borderStyle="round" borderColor="yellow" padding={2} backgroundColor="black">
+            <Text color="yellow"><Spinner type="dots" /> {playStatus}</Text>
+          </Box>
+        </Box>
+      )}
 
       {/* ── DESCRIPTION OVERLAY ── */}
       {expandedDesc && (

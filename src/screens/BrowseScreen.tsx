@@ -8,6 +8,7 @@ import {
 } from "../lib/anilist.js";
 import { Thumbnail } from "../components/Thumbnail.js";
 import { useTerminalSize } from "../lib/useTerminalSize.js";
+import { getContinueWatching } from "../lib/store.js";
 
 // anime covers are roughly 2:3 (w:h). raw pixel height is rows*2 (half-block
 // trick), so cols:rows*2 should stay close to 2:3 or the crop looks wrong.
@@ -44,11 +45,84 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
   useEffect(() => {
     fetchCategories()
       .then((data) => {
-        setRows(data);
-        setColByRow(data.map(() => 0));
+        const cw = getContinueWatching();
+        let initialRows = data;
+        if (cw.length > 0) {
+          initialRows = [{
+            label: "Continue Watching",
+            items: cw.map(c => {
+              const m = Math.floor(c.positionSeconds / 60);
+              const s = Math.floor(c.positionSeconds % 60).toString().padStart(2, '0');
+              const subtext = c.positionSeconds > 0 ? `ep ${c.resumeEpisode} · ${m}:${s}` : `ep ${c.resumeEpisode}`;
+              return {
+                id: c.id,
+                title: { english: c.title, romaji: c.title },
+                episodes: c.totalEpisodes,
+                status: null,
+                description: subtext,
+                format: null,
+                duration: null,
+                seasonYear: null,
+                coverImage: { medium: c.cover, large: c.cover },
+                bannerImage: null
+              } as AnilistAnime;
+            })
+          }, ...data];
+        }
+        setRows(initialRows);
+        setColByRow(initialRows.map(() => 0));
       })
       .catch((e: Error) => setError(e.message));
   }, []);
+
+  useEffect(() => {
+    if (!rows) return;
+    if (isFocused) {
+      const cw = getContinueWatching();
+      let cwRow: CategoryRow | null = null;
+      if (cw.length > 0) {
+        cwRow = {
+          label: "Continue Watching",
+          items: cw.map(c => {
+             const m = Math.floor(c.positionSeconds / 60);
+             const s = Math.floor(c.positionSeconds % 60).toString().padStart(2, '0');
+             const subtext = c.positionSeconds > 0 ? `ep ${c.resumeEpisode} · ${m}:${s}` : `ep ${c.resumeEpisode}`;
+             return {
+               id: c.id,
+               title: { english: c.title, romaji: c.title },
+               episodes: c.totalEpisodes,
+               status: null,
+               description: subtext,
+               format: null,
+               duration: null,
+               seasonYear: null,
+               coverImage: { medium: c.cover, large: c.cover },
+               bannerImage: null
+             } as AnilistAnime;
+          })
+        };
+      }
+      
+      setRows(prev => {
+        if (!prev) return prev;
+        const hasCw = prev[0]?.label === "Continue Watching";
+        if (cwRow && !hasCw) {
+          setFocusRow(r => r >= 0 ? r + 1 : r);
+          setColByRow(c => [0, ...c]);
+          return [cwRow, ...prev];
+        } else if (!cwRow && hasCw) {
+          setFocusRow(r => Math.max(-1, r - 1));
+          setColByRow(c => c.slice(1));
+          return prev.slice(1);
+        } else if (cwRow && hasCw) {
+          const next = [...prev];
+          next[0] = cwRow;
+          return next;
+        }
+        return prev;
+      });
+    }
+  }, [isFocused]);
 
   const maxVisibleRows = Math.max(1, Math.ceil((termRows - CHROME_LINES) / ROW_HEIGHT));
 
@@ -76,7 +150,7 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
       return;
     }
 
-    const spotlightItems = rows[0]?.items ?? []; // Use trending for spotlight
+    const spotlightItems = rows.find(r => r.label !== "Continue Watching")?.items ?? []; // Use trending for spotlight
 
     if (focusRow === -1) {
       // Hero Carousel is focused
@@ -136,7 +210,7 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
   }
 
   const visibleRows = rows.slice(scrollOffset, scrollOffset + maxVisibleRows);
-  const spotlightItems = rows[0]?.items ?? [];
+  const spotlightItems = rows.find(r => r.label !== "Continue Watching")?.items ?? [];
   const heroAnime = spotlightItems[spotlightIndex];
   const isHeroFocused = focusRow === -1;
 
@@ -231,8 +305,11 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
                         rows={THUMB_ROWS}
                       />
                     </Box>
-                    <Box width={CARD_WIDTH} overflow="hidden">
+                    <Box width={CARD_WIDTH} overflow="hidden" flexDirection="column">
                       <Text wrap="truncate-end">{title}</Text>
+                      {row.label === "Continue Watching" && (
+                        <Text dimColor>{item.description}</Text>
+                      )}
                     </Box>
                   </Box>
                 );

@@ -4,7 +4,6 @@ import { BrowseScreen } from "./screens/BrowseScreen.js";
 import { DetailScreen } from "./screens/DetailScreen.js";
 import { SearchOverlay } from "./screens/SearchOverlay.js";
 import { SearchGridScreen } from "./screens/SearchGridScreen.js";
-import { EpisodePickerOverlay } from "./screens/EpisodePickerOverlay.js";
 import { SplashScreen } from "./screens/SplashScreen.js";
 import type { AnilistAnime } from "./lib/anilist.js";
 import { useTerminalSize } from "./lib/useTerminalSize.js";
@@ -14,8 +13,7 @@ export type Screen =
   | { type: "browse" }
   | { type: "search-overlay" }
   | { type: "search-grid"; query: string }
-  | { type: "detail"; anime: AnilistAnime }
-  | { type: "player"; anime: AnilistAnime };
+  | { type: "detail"; anime: AnilistAnime };
 
 export function App() {
   const [stack, setStack] = useState<Screen[]>([{ type: "splash" }]);
@@ -55,32 +53,25 @@ export function App() {
     return <SplashScreen onContinue={() => setStack([{ type: "browse" }])} />;
   }
 
-  if (current.type === "detail" || current.type === "player") {
+  if (current.type === "detail") {
     const detailScreens = stack.filter((s) => s.type === "detail") as Extract<Screen, { type: "detail" }>[];
     
     return (
       <Box flexDirection="column" height={termRows} overflow="hidden">
         {detailScreens.map((s, i) => {
           const isTop = i === detailScreens.length - 1;
-          const isActive = isTop && current.type !== "player";
           return (
             <Box key={i} position={i > 0 ? "absolute" : "relative"} width="100%" height="100%">
               <DetailScreen 
                 anime={s.anime} 
-                isActive={isActive}
+                isActive={isTop}
                 onBack={pop} 
-                onWatch={() => push({ type: "player", anime: s.anime })} 
+                onWatch={() => {}} // Now handled internally
                 onNavigate={(newAnime) => push({ type: "detail", anime: newAnime })}
               />
             </Box>
           );
         })}
-        {current.type === "player" && (
-          <EpisodePickerOverlay 
-            anime={current.anime} 
-            onClose={pop} 
-          />
-        )}
       </Box>
     );
   }

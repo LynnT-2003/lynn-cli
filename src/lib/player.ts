@@ -1,68 +1,134 @@
+import net from "node:net";
+import os from "node:os";
+import path from "node:path";
+import fs from "node:fs";
 import { execa } from "execa";
 
-export type PlayerOptions = {
-  videoUrl: string;
-  referer: string;
-  subtitleUrl: string | null;
-  title: string;
-  episodeNo: string;
+export type PlayEpisodeOptions = {
+  query: string;
+  episode: number;
+  startAt?: number;
+  onPositionUpdate: (pos: number, dur: number) => void;
 };
 
-export async function launchPlayer(opts: PlayerOptions) {
-  const players = ["iina", "mpv", "vlc"];
-  let selectedPlayer: string | null = null;
+export type PlayEpisodeResult = {
+  pos: number;
+  dur: number;
+  finished: boolean;
+};
+
+export class PlayerError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PlayerError";
+  }
+}
+
+export async function playEpisode({
+  query,
+  episode,
+  startAt,
+  onPositionUpdate
+}: PlayEpisodeOptions): Promise<PlayEpisodeResult> {
+  try {
+    await execa("which", ["mpv"]);
+  } catch {
+    throw new PlayerError("install with: brew install mpv");
+  }
+
+  try {
+    await execa("which", ["ani-cli"]);
+  } catch {
+    throw new PlayerError("ani-cli not found in PATH");
+  }
+
+  const sockPath = path.join(os.tmpdir(), `mpv-lynn-${Date.now()}-${Math.random().toString(36).slice(2)}.sock`);
   
-  for (const p of players) {
-    try {
-      await execa("sh", ["-c", `command -v ${p}`]);
-      selectedPlayer = p;
-      break;
-    } catch {
-      continue;
+  let playerFlags = `--input-ipc-server=${sockPath}`;
+  if (startAt !== undefined && startAt > 5) {
+    playerFlags += ` --start=${Math.floor(startAt)}`;
+  }
+
+  const env = {
+    ...process.env,
+    ANI_CLI_PLAYER: "mpv",
+    ANI_CLI_PLAYER_FLAGS: playerFlags,
+  };
+
+  const cp = execa("ani-cli", ["--exit-after-play", "-S", "1", "-e", String(episode), query], {
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+    reject: false,
+  });
+
+  let socket: net.Socket | null = null;
+  let pos = 0;
+  let dur = 0;
+  let saveTimer: NodeJS.Timeout | null = null;
+
+  try {
+    let attempts = 0;
+    let cpExited = false;
+    cp.then(() => { cpExited = true; });
+
+    while (attempts < 60 && !cpExited) {
+      if (fs.existsSync(sockPath)) {
+        try {
+          socket = net.connect(sockPath);
+          break;
+        } catch {
+          // Socket might not be ready to accept connections yet
+        }
+      }
+      await new Promise(r => setTimeout(r, 500));
+      attempts++;
+    }
+
+    if (socket) {
+      socket.write(JSON.stringify({ command: ["observe_property", 1, "time-pos"] }) + "\n");
+      socket.write(JSON.stringify({ command: ["observe_property", 2, "duration"] }) + "\n");
+
+      let buffer = "";
+      socket.on("data", (data) => {
+        buffer += data.toString();
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const msg = JSON.parse(line);
+            if (msg.event === "property-change") {
+              if (msg.name === "time-pos" && typeof msg.data === "number") {
+                pos = msg.data;
+              } else if (msg.name === "duration" && typeof msg.data === "number") {
+                dur = msg.data;
+              }
+            }
+          } catch {}
+        }
+      });
+
+      socket.on("error", () => {}); // Handle connection dropped gracefully
+
+      saveTimer = setInterval(() => {
+        if (pos > 0) onPositionUpdate(pos, dur);
+      }, 10000);
+    } else if (!cpExited) {
+      throw new PlayerError("Timeout waiting for mpv IPC socket");
+    }
+
+    await cp;
+
+    const finished = dur > 0 && (pos / dur > 0.9 || dur - pos < 90);
+    return { pos, dur, finished };
+  } finally {
+    if (saveTimer) clearInterval(saveTimer);
+    if (socket) socket.destroy();
+    if (fs.existsSync(sockPath)) {
+      try {
+        fs.unlinkSync(sockPath);
+      } catch {}
     }
   }
-  
-  if (!selectedPlayer && process.platform === "darwin") {
-    try {
-      await execa("sh", ["-c", 'command -v "/Applications/IINA.app/Contents/MacOS/iina-cli"']);
-      selectedPlayer = "/Applications/IINA.app/Contents/MacOS/iina-cli";
-    } catch {
-      // ignore
-    }
-  }
-  
-  if (!selectedPlayer) throw new Error("No player found (mpv, vlc, iina)");
-
-  const mediaTitle = `${opts.title} Episode ${opts.episodeNo}`;
-  let args: string[] = [];
-
-  if (selectedPlayer.includes("iina")) {
-    const subArg = opts.subtitleUrl ? opts.subtitleUrl.replace(/:/g, "\\:") : null;
-    args = [
-      `--mpv-referrer=${opts.referer}`,
-      ...(subArg ? [`--mpv-sub-files=${subArg}`] : []),
-      `--mpv-force-media-title=${mediaTitle}`,
-      "--no-stdin",
-      "--keep-running",
-      opts.videoUrl
-    ];
-  } else if (selectedPlayer === "mpv") {
-    args = [
-      `--referrer=${opts.referer}`,
-      ...(opts.subtitleUrl ? [`--sub-file=${opts.subtitleUrl}`] : []),
-      `--force-media-title=${mediaTitle}`,
-      opts.videoUrl
-    ];
-  } else if (selectedPlayer === "vlc") {
-    args = [
-      `--http-referrer=${opts.referer}`,
-      `--meta-title=${mediaTitle}`,
-      opts.videoUrl,
-      ...(opts.subtitleUrl ? [`:input-slave=${opts.subtitleUrl}`] : [])
-    ];
-  }
-
-  const cp = execa(selectedPlayer, args, { detached: true, stdio: "ignore" });
-  cp.unref();
-  return cp;
 }

@@ -4,6 +4,9 @@ import { render } from "ink";
 import { Command } from "commander";
 import { AnimeTest } from "./screens/AnimeTest.js";
 import { App } from "./App.js";
+import { loadLibrary } from "./lib/store.js";
+
+loadLibrary();
 
 // bare `lynn-cli` with no subcommand jumps straight into the full-screen
 // browse experience - no "run browse first" step, matches the claude-code
