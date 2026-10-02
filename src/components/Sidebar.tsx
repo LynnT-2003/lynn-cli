@@ -17,7 +17,7 @@ export function Sidebar({ activeTab, isFocused }: SidebarProps) {
   ];
 
   return (
-    <Box flexDirection="column" width={SIDEBAR_WIDTH} borderRight borderStyle="single" borderColor={isFocused ? theme.border.focus : theme.border.default} paddingX={1} paddingTop={1}>
+    <Box flexDirection="column" width={SIDEBAR_WIDTH} flexShrink={0} borderRight borderStyle="single" borderColor={isFocused ? theme.border.focus : theme.border.active} paddingX={1} paddingTop={1}>
       <Box marginBottom={2}><Text bold color={theme.brand}>LYNN CLI</Text></Box>
       {tabs.map(tab => {
         const isActive = activeTab === tab.id;
