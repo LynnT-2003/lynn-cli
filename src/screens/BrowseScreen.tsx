@@ -9,6 +9,7 @@ import {
 import { Thumbnail } from "../components/Thumbnail.js";
 import { useLayout } from "../lib/useLayout.js";
 import { getContinueWatching } from "../lib/store.js";
+import { theme } from "../lib/theme.js";
 
 // anime covers are roughly 2:3 (w:h). raw pixel height is rows*2 (half-block
 // trick), so cols:rows*2 should stay close to 2:3 or the crop looks wrong.
@@ -195,13 +196,13 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
   }, { isActive: isFocused });
 
   if (error) {
-    return <Text color="red">✗ {error}</Text>;
+    return <Text color={theme.text.error}>✗ {error}</Text>;
   }
 
   if (!rows) {
     return (
       <Box>
-        <Text color="cyan">
+        <Text color={theme.text.accent}>
           <Spinner type="dots" />
         </Text>
         <Text> loading catalogue...</Text>
@@ -220,35 +221,35 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
   return (
     <Box flexDirection="column" padding={1}>
       <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
-        <Text bold color="cyan">landing-page coming soon</Text>
-        <Text dimColor>arrows to move, enter to select, 1-3 tabs</Text>
+        <Text bold color={theme.text.accent}>landing-page coming soon</Text>
+        <Text color={theme.text.dim}>arrows to move, enter to select, 1-3 tabs</Text>
       </Box>
 
       {/* SPOTLIGHT HERO BANNER */}
       {heroAnime && (
-        <Box flexDirection="row" height={15} marginBottom={1} overflow="hidden" borderStyle="round" borderColor={isHeroFocused ? "yellow" : "gray"}>
+        <Box flexDirection="row" height={15} marginBottom={1} overflow="hidden" borderStyle="round" borderColor={isHeroFocused ? theme.border.hero : theme.border.default}>
           {/* LEFT: INFO */}
           <Box flexDirection="column" width={leftWidth} paddingRight={2} justifyContent="center" paddingLeft={1}>
-            <Text color="yellowBright" bold>#{spotlightIndex + 1} Spotlight</Text>
+            <Text color={theme.text.highlightBright} bold>#{spotlightIndex + 1} Spotlight</Text>
             <Box marginY={1} overflow="hidden" height={1}>
-              <Text bold color="white" wrap="truncate">{heroAnime.title.english ?? heroAnime.title.romaji}</Text>
+              <Text bold color={theme.text.normal} wrap="truncate">{heroAnime.title.english ?? heroAnime.title.romaji}</Text>
             </Box>
             
             <Box flexDirection="row" marginBottom={1}>
-              <Text color="gray">▶ {heroAnime.format ?? "TV"} • {heroAnime.duration ? `${heroAnime.duration}m` : "?m"} • {heroAnime.seasonYear ?? ""}  </Text>
-              <Text backgroundColor="green" color="black"> HD </Text>
+              <Text color={theme.text.dim}>▶ {heroAnime.format ?? "TV"} • {heroAnime.duration ? `${heroAnime.duration}m` : "?m"} • {heroAnime.seasonYear ?? ""}  </Text>
+              <Text backgroundColor={theme.bg.focus} color={theme.bg.black}> HD </Text>
               <Text>  </Text>
-              <Text backgroundColor="white" color="black"> EP {heroAnime.episodes ?? "?"} </Text>
+              <Text backgroundColor={theme.bg.inverse} color={theme.bg.black}> EP {heroAnime.episodes ?? "?"} </Text>
             </Box>
             
             <Box height={2} overflow="hidden">
-              <Text color="gray" wrap="wrap">{heroAnime.description?.replace(/<[^>]+>/g, "").trim()}</Text>
+              <Text color={theme.text.dim} wrap="wrap">{heroAnime.description?.replace(/<[^>]+>/g, "").trim()}</Text>
             </Box>
             
             <Box flexDirection="row" marginTop={1}>
-              <Text backgroundColor={isHeroFocused ? "yellow" : "gray"} color="black" bold> ▶ Watch Now </Text>
+              <Text backgroundColor={isHeroFocused ? theme.bg.highlight : theme.bg.active} color={theme.bg.black} bold> ▶ Watch Now </Text>
               <Text>   </Text>
-              <Text backgroundColor="gray" color="black"> Detail {'>'} </Text>
+              <Text backgroundColor={theme.bg.active} color={theme.bg.black}> Detail {'>'} </Text>
             </Box>
           </Box>
           
@@ -277,7 +278,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
 
         return (
           <Box key={row.label} flexDirection="column" marginTop={1}>
-            <Text bold color={focusedRow ? "greenBright" : "white"}>
+            <Text bold color={focusedRow ? theme.text.successBright : theme.text.normal}>
               {focusedRow ? "▶ " : "  "}
               {row.label}
               {focusedRow ? ` (${col + 1}/${items.length})` : ""}
@@ -296,7 +297,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
                     width={CARD_WIDTH + CARD_BORDER}
                     marginRight={CARD_GAP}
                     borderStyle={isFocused ? "round" : undefined}
-                    borderColor={isFocused ? "green" : undefined}
+                    borderColor={isFocused ? theme.border.focus : undefined}
                   >
                     <Box width={CARD_WIDTH} height={THUMB_ROWS} overflow="hidden">
                       <Thumbnail
@@ -306,7 +307,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
                       />
                     </Box>
                     <Box width={CARD_WIDTH} overflow="hidden" flexDirection="column">
-                      <Text wrap="truncate-end">{title}</Text>
+                      <Text wrap="truncate-end" bold={isFocused} color={isFocused ? theme.text.successBright : theme.text.normal}>{title}</Text>
                       {row.label === "Continue Watching" && (
                         <Text dimColor>{item.description}</Text>
                       )}

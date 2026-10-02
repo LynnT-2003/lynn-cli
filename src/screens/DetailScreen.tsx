@@ -11,6 +11,7 @@ import { Thumbnail } from "../components/Thumbnail.js";
 import { useLayout } from "../lib/useLayout.js";
 import { playEpisode } from "../lib/player.js";
 import { getEntry, saveProgress, markEpisodeCompleted } from "../lib/store.js";
+import { theme } from "../lib/theme.js";
 
 // ── layout constants ──────────────────────────────────────────
 
@@ -288,10 +289,10 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
     const title = anime.title.english ?? anime.title.romaji ?? "unknown";
     return (
       <Box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
-        <Box borderStyle="single" borderColor="cyan" padding={2} backgroundColor="black" flexDirection="column" alignItems="center">
-          <Text color="cyan" bold>{title}</Text>
+        <Box borderStyle="single" borderColor={theme.border.active} padding={2} backgroundColor={theme.bg.black} flexDirection="column" alignItems="center">
+          <Text color={theme.text.accent} bold>{title}</Text>
           <Box marginTop={1}>
-            <Text color="yellow">
+            <Text color={theme.text.highlight}>
               <Spinner type="dots" /> ACCESSING DATABASE...
             </Text>
           </Box>
@@ -303,10 +304,10 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
   if (error) {
     return (
       <Box position="absolute" width="100%" height="100%" alignItems="center" justifyContent="center">
-        <Box borderStyle="single" borderColor="red" padding={2} backgroundColor="black" flexDirection="column" alignItems="center">
-          <Text color="red" bold inverse> ERROR </Text>
+        <Box borderStyle="single" borderColor={theme.border.error} padding={2} backgroundColor={theme.bg.black} flexDirection="column" alignItems="center">
+          <Text color={theme.text.error} bold inverse> ERROR </Text>
           <Box marginTop={1} marginBottom={1}>
-            <Text color="red">Sorry, not found.</Text>
+            <Text color={theme.text.error}>Sorry, not found.</Text>
           </Box>
           <Text dimColor><Text inverse> ESC </Text> BACK</Text>
         </Box>
@@ -364,29 +365,29 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
   const visibleRelations = relations.slice(relStart, relStart + MAX_ITEMS);
 
   return (
-    <Box flexDirection="column" height="100%" overflow="hidden" backgroundColor="black">
+    <Box flexDirection="column" height="100%" overflow="hidden" backgroundColor={theme.bg.black}>
       <Box
         flexDirection="column"
         borderStyle="single"
-        borderColor="cyan"
+        borderColor={theme.border.active}
         flexGrow={1}
         overflow="hidden"
       >
         {/* ── HEADER ── */}
-        <Box flexDirection="row" justifyContent="space-between" paddingX={2} borderBottom={true} borderStyle="single" borderColor="cyan" borderTop={false} borderLeft={false} borderRight={false}>
+        <Box flexDirection="row" justifyContent="space-between" paddingX={2} borderBottom={true} borderStyle="single" borderColor={theme.border.active} borderTop={false} borderLeft={false} borderRight={false}>
           <Box width="60%" overflow="hidden">
-            <Text bold color="cyan" wrap="truncate">{title.toUpperCase()}</Text>
+            <Text bold color={theme.text.accent} wrap="truncate">{title.toUpperCase()}</Text>
           </Box>
           <Box flexShrink={0}>
-            {infoLine && <Text color="green">{infoLine}</Text>}
-            {timeLine && <Text color="yellow"> · {timeLine}</Text>}
+            {infoLine && <Text color={theme.text.success}>{infoLine}</Text>}
+            {timeLine && <Text color={theme.text.highlight}> · {timeLine}</Text>}
           </Box>
         </Box>
 
         {/* ── MAIN CONTENT ── */}
         <Box flexDirection="row" flexGrow={1} overflow="hidden">
           {/* LEFT COLUMN */}
-          <Box flexDirection="column" width={44} paddingX={1} borderRight={true} borderStyle="single" borderColor="cyan" borderTop={false} borderBottom={false} borderLeft={false} alignItems="center" paddingTop={1}>
+          <Box flexDirection="column" width={44} paddingX={1} borderRight={true} borderStyle="single" borderColor={theme.border.active} borderTop={false} borderBottom={false} borderLeft={false} alignItems="center" paddingTop={1}>
             <Thumbnail url={coverUrl} cols={THUMB_COLS} rows={THUMB_ROWS} />
 
             
@@ -396,8 +397,8 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
           <Box flexDirection="column" flexGrow={1} paddingX={2} paddingTop={1} overflow="hidden">
             <Box marginBottom={1} overflow="hidden" flexShrink={0}>
               <Text wrap="wrap">
-                <Text color="yellow">GENRES  </Text>
-                <Text color="cyan">{d.genres.length ? d.genres.join(" · ") : "NONE"}</Text>
+                <Text color={theme.text.highlight}>GENRES  </Text>
+                <Text color={theme.text.accent}>{d.genres.length ? d.genres.join(" · ") : "NONE"}</Text>
               </Text>
             </Box>
 
@@ -414,7 +415,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
             {/* ── EPISODES GRID ── */}
             <Box flexDirection="column" marginBottom={1} flexShrink={0}>
               <Box flexDirection="row" justifyContent="space-between">
-                <Text color="yellow" bold>EPISODES</Text>
+                <Text color={theme.text.highlight} bold>EPISODES</Text>
                 {d.episodes && <Text dimColor>{d.episodes} total</Text>}
               </Box>
               
@@ -422,7 +423,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
                 flexDirection="row" 
                 flexWrap="wrap" 
                 borderStyle={isFocused('episodes') ? "round" : "single"}
-                borderColor={isFocused('episodes') ? "green" : "gray"}
+                borderColor={isFocused('episodes') ? theme.border.focus : theme.border.default}
                 paddingX={1}
               >
                 {(() => {
@@ -467,26 +468,26 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
                   );
                 })()}
               </Box>
-              {watchResult && <Text color="green">↳ {watchResult}</Text>}
+              {watchResult && <Text color={theme.text.success}>↳ {watchResult}</Text>}
             </Box>
 
             <Box flexDirection="row" flexGrow={2} overflow="hidden">
               {/* SUB COLUMN 1: Characters & Relations */}
               <Box flexDirection="column" width="50%" paddingRight={2}>
-                <Text color="yellow" bold>CHARACTERS</Text>
+                <Text color={theme.text.highlight} bold>CHARACTERS</Text>
                 <Box flexDirection="column" flexGrow={1} overflow="hidden" marginBottom={1}>
                   {d.characters.edges.length === 0 ? <Text dimColor>NONE</Text> : null}
                   {d.characters.edges.slice(0, MAX_ITEMS).map((c, i) => (
                     <Box key={i} width="100%" overflow="hidden">
                       <Text wrap="truncate">
-                        <Text color="cyan">› </Text>
+                        <Text color={theme.text.accent}>› </Text>
                         <Text color={c.role === "MAIN" ? "green" : "white"}>{c.node.name.full}</Text>
                       </Text>
                     </Box>
                   ))}
                 </Box>
 
-                <Text color="yellow" bold>RELATIONS</Text>
+                <Text color={theme.text.highlight} bold>RELATIONS</Text>
                 <Box flexDirection="column" flexGrow={1} overflow="hidden">
                   {relations.length === 0 ? <Text dimColor>NONE</Text> : null}
                   {visibleRelations.map((r, i) => {
@@ -495,7 +496,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
                     return (
                       <Box key={actualIndex} width="100%" overflow="hidden">
                         <Text wrap="truncate" backgroundColor={isF ? activeBg : undefined}>
-                          <Text color="cyan">› </Text>
+                          <Text color={theme.text.accent}>› </Text>
                           <Text color={isF ? "white" : "green"}>
                             {r.relationType.replace(/_/g, " ").substring(0, 4)} {r.node.title.english ?? r.node.title.romaji}
                           </Text>
@@ -508,27 +509,27 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
 
               {/* SUB COLUMN 2: Staff & Studios */}
               <Box flexDirection="column" width="50%">
-                <Text color="yellow" bold>STAFF</Text>
+                <Text color={theme.text.highlight} bold>STAFF</Text>
                 <Box flexDirection="column" flexGrow={1} overflow="hidden" marginBottom={1}>
                   {d.staff.edges.length === 0 ? <Text dimColor>NONE</Text> : null}
                   {d.staff.edges.slice(0, MAX_ITEMS).map((s, i) => (
                     <Box key={i} width="100%" overflow="hidden">
                       <Text wrap="truncate">
-                        <Text color="cyan">› </Text>
-                        <Text color="green">{(s.role || "").split(" ")[0].substring(0, 4)} </Text>
+                        <Text color={theme.text.accent}>› </Text>
+                        <Text color={theme.text.success}>{(s.role || "").split(" ")[0].substring(0, 4)} </Text>
                         <Text>{s.node.name.full}</Text>
                       </Text>
                     </Box>
                   ))}
                 </Box>
 
-                <Text color="yellow" bold>STUDIOS</Text>
+                <Text color={theme.text.highlight} bold>STUDIOS</Text>
                 <Box flexDirection="column" flexGrow={1} overflow="hidden">
                   {(mainStudios.length === 0 && otherStudios.length === 0) ? <Text dimColor>NONE</Text> : null}
                   {mainStudios.concat(otherStudios).slice(0, MAX_ITEMS).map((s, i) => (
                     <Box key={i} width="100%" overflow="hidden">
                       <Text wrap="truncate">
-                        <Text color="cyan">› </Text>
+                        <Text color={theme.text.accent}>› </Text>
                         <Text>{s}</Text>
                       </Text>
                     </Box>
@@ -540,23 +541,23 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
         </Box>
 
         {/* ── BOTTOM AREA: Links & Meta ── */}
-        <Box flexDirection="column" flexShrink={0} paddingX={2} borderTop={true} borderStyle="single" borderColor="cyan" borderBottom={false} borderLeft={false} borderRight={false} overflow="hidden">
+        <Box flexDirection="column" flexShrink={0} paddingX={2} borderTop={true} borderStyle="single" borderColor={theme.border.active} borderBottom={false} borderLeft={false} borderRight={false} overflow="hidden">
           {nonSpoilerTags.length > 0 && (
             <Text wrap="truncate">
-              <Text color="yellow">TAGS    </Text>
+              <Text color={theme.text.highlight}>TAGS    </Text>
               <Text dimColor>{nonSpoilerTags.map(t => `${t.name} ${t.rank}%`).join(" · ")}</Text>
             </Text>
           )}
           {d.streamingEpisodes.length > 0 && (
             <Text wrap="truncate">
-              <Text color="yellow">EPISODES </Text>
+              <Text color={theme.text.highlight}>EPISODES </Text>
               <Text dimColor>{d.streamingEpisodes.map(s => s.title).join(" · ")}</Text>
             </Text>
           )}
 
           {links.length > 0 && (
             <Box flexDirection="row" flexWrap="wrap">
-              <Text color="yellow">LINKS    </Text>
+              <Text color={theme.text.highlight}>LINKS    </Text>
               {links.map((l, i) => {
                 const isF = isFocused('link', i);
                 return (
@@ -573,7 +574,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
 
           {similar.length > 0 && (
             <Box flexDirection="row" flexWrap="wrap">
-              <Text color="yellow">SIMILAR  </Text>
+              <Text color={theme.text.highlight}>SIMILAR  </Text>
               {similar.map((s, i) => {
                 const isF = isFocused('similar', i);
                 const title = s.title.english ?? s.title.romaji;
@@ -594,8 +595,8 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
       {/* ── PLAYER SPINNER ── */}
       {playing && (
         <Box position="absolute" width="100%" height="100%" padding={2} flexDirection="column" justifyContent="center" alignItems="center">
-          <Box borderStyle="round" borderColor="yellow" padding={2} backgroundColor="black">
-            <Text color="yellow"><Spinner type="dots" /> {playStatus}</Text>
+          <Box borderStyle="round" borderColor={theme.border.hero} padding={2} backgroundColor={theme.bg.black}>
+            <Text color={theme.text.highlight}><Spinner type="dots" /> {playStatus}</Text>
           </Box>
         </Box>
       )}
@@ -603,8 +604,8 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
       {/* ── DESCRIPTION OVERLAY ── */}
       {expandedDesc && (
         <Box position="absolute" width="100%" height="100%" padding={2} flexDirection="column" justifyContent="center" alignItems="center">
-          <Box width="80%" borderStyle="double" borderColor="cyan" padding={2} backgroundColor="black">
-            <Box marginBottom={1}><Text color="yellow" bold>SYNOPSIS</Text></Box>
+          <Box width="80%" borderStyle="double" borderColor={theme.border.active} padding={2} backgroundColor={theme.bg.black}>
+            <Box marginBottom={1}><Text color={theme.text.highlight} bold>SYNOPSIS</Text></Box>
             <Text>{description}</Text>
             <Box marginTop={2}>
               <Text dimColor><Text inverse> ESC </Text> CLOSE</Text>
@@ -619,7 +620,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
           <Text inverse> ESC </Text> BACK   <Text inverse> ↑↓←→ </Text> NAVIGATE   <Text inverse> ENTER </Text> SELECT
         </Text>
         {d.nextAiringEpisode && (
-          <Text color="greenBright" bold>
+          <Text color={theme.text.successBright} bold>
             📺 EP {d.nextAiringEpisode.episode} IN {timeUntil(d.nextAiringEpisode.timeUntilAiring).toUpperCase()}
           </Text>
         )}
