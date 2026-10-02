@@ -8,7 +8,7 @@ import {
   type AnilistAnimeDetail,
 } from "../lib/anilist.js";
 import { Thumbnail } from "../components/Thumbnail.js";
-import { useTerminalSize } from "../lib/useTerminalSize.js";
+import { useLayout } from "../lib/useLayout.js";
 import { playEpisode } from "../lib/player.js";
 import { getEntry, saveProgress, markEpisodeCompleted } from "../lib/store.js";
 
@@ -62,8 +62,8 @@ type Props = {
   anime: AnilistAnime;
   isActive?: boolean;
   onBack: () => void;
-  onWatch: () => void;
   onNavigate?: (anime: AnilistAnime) => void;
+  onFocusSidebar?: () => void;
 };
 
 type FocusState = {
@@ -71,8 +71,8 @@ type FocusState = {
   index: number;
 };
 
-export function DetailScreen({ anime, isActive = true, onBack, onWatch, onNavigate }: Props) {
-  const { columns, rows: termRows } = useTerminalSize();
+export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFocusSidebar }: Props) {
+  const { contentColumns: columns, rows: termRows } = useLayout();
   const [detail, setDetail] = useState<AnilistAnimeDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -166,15 +166,19 @@ export function DetailScreen({ anime, isActive = true, onBack, onWatch, onNaviga
 
     if (key.leftArrow) {
       if (focus.type === 'episodes') {
-        setSelectedEp(e => Math.max(1, e - 1));
+        const CHUNK_SIZE = 50;
+        const chunkIndex = Math.floor((selectedEp - 1) / CHUNK_SIZE);
+        const chunkStart = chunkIndex * CHUNK_SIZE + 1;
+        if (selectedEp === chunkStart) onFocusSidebar?.();
+        else setSelectedEp(e => Math.max(1, e - 1));
       } else if (focus.type === 'desc' || focus.type === 'relation') {
-        setFocus({ type: 'episodes', index: 0 });
+        onFocusSidebar?.();
       } else if (focus.type === 'link') {
         if (focus.index > 0) setFocus({ type: 'link', index: focus.index - 1 });
-        else setFocus({ type: 'episodes', index: 0 });
+        else onFocusSidebar?.();
       } else if (focus.type === 'similar') {
         if (focus.index > 0) setFocus({ type: 'similar', index: focus.index - 1 });
-        else setFocus({ type: 'episodes', index: 0 });
+        else onFocusSidebar?.();
       }
       return;
     }

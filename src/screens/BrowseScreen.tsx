@@ -7,7 +7,7 @@ import {
   type CategoryRow,
 } from "../lib/anilist.js";
 import { Thumbnail } from "../components/Thumbnail.js";
-import { useTerminalSize } from "../lib/useTerminalSize.js";
+import { useLayout } from "../lib/useLayout.js";
 import { getContinueWatching } from "../lib/store.js";
 
 // anime covers are roughly 2:3 (w:h). raw pixel height is rows*2 (half-block
@@ -26,13 +26,13 @@ const CHROME_LINES = 3 + 16; // 1 padding-top + 1 header text + 1 padding-bottom
 
 type Props = {
   onSelect: (anime: AnilistAnime) => void;
-  onSearch: () => void;
   isFocused: boolean;
+  onFocusSidebar?: () => void;
 };
 
-export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
+export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
   const { exit } = useApp();
-  const { columns, rows: termRows } = useTerminalSize();
+  const { contentColumns: columns, rows: termRows } = useLayout();
 
   const [rows, setRows] = useState<CategoryRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -145,21 +145,17 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
     }
     if (!rows) return;
 
-    if (input === "s") {
-      onSearch();
-      return;
-    }
-
     const spotlightItems = rows.find(r => r.label !== "Continue Watching")?.items ?? []; // Use trending for spotlight
 
     if (focusRow === -1) {
       // Hero Carousel is focused
       if (key.upArrow) {
-        onSearch();
+        // Do nothing, already at top
       } else if (key.downArrow) {
         setFocusRow(0);
       } else if (key.leftArrow) {
-        setSpotlightIndex((prev) => Math.max(0, prev - 1));
+        if (spotlightIndex === 0) onFocusSidebar?.();
+        else setSpotlightIndex((prev) => Math.max(0, prev - 1));
       } else if (key.rightArrow) {
         setSpotlightIndex((prev) => Math.min(spotlightItems.length - 1, prev + 1));
       } else if (key.return) {
@@ -177,11 +173,15 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
     } else if (key.downArrow) {
       setFocusRow((r) => Math.min(rows.length - 1, r + 1));
     } else if (key.leftArrow) {
-      setColByRow((prev) => {
-        const next = [...prev];
-        next[focusRow] = Math.max(0, currentCol - 1);
-        return next;
-      });
+      if (currentCol === 0) {
+        onFocusSidebar?.();
+      } else {
+        setColByRow((prev) => {
+          const next = [...prev];
+          next[focusRow] = Math.max(0, currentCol - 1);
+          return next;
+        });
+      }
     } else if (key.rightArrow) {
       setColByRow((prev) => {
         const next = [...prev];
@@ -220,8 +220,8 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
   return (
     <Box flexDirection="column" padding={1}>
       <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
-        <Text bold color="cyan">aniwatch-cli</Text>
-        <Text dimColor>s to search, arrows to move, enter to select</Text>
+        <Text bold color="cyan">landing-page coming soon</Text>
+        <Text dimColor>arrows to move, enter to select, 1-3 tabs</Text>
       </Box>
 
       {/* SPOTLIGHT HERO BANNER */}
