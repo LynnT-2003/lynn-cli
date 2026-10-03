@@ -284,7 +284,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
               {focusedRow ? ` (${col + 1}/${items.length})` : ""}
             </Text>
 
-            <Box flexDirection="row" width="100%" justifyContent="space-between">
+            <Box flexDirection="row" width="100%" justifyContent={row.label === "Continue Watching" ? "flex-start" : "space-between"}>
               {visible.map((item, i) => {
                 const actualIdx = start + i;
                 const isFocused = focusedRow && actualIdx === col;
