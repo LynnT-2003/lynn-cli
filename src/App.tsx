@@ -18,6 +18,7 @@ function MainApp() {
   const { activeTab, currentScreen, push, pop, switchTab } = useNavigation();
   const { rows: termRows } = useLayout();
   const [sidebarFocused, setSidebarFocused] = useState(false);
+  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
 
   // Global key handling for tab switching
   // NOTE: Ink uses a global input listener. Since we don't have text inputs yet,
@@ -42,6 +43,10 @@ function MainApp() {
       } else if (key.downArrow) {
         if (activeTab === "home") switchTab("profile");
         else if (activeTab === "profile") switchTab("search");
+      }
+    } else if (currentScreen.kind === "browse" && !searchOverlayOpen) {
+      if (input?.toLowerCase() === "s" || (key.upArrow && false)) { // the upArrow logic from BrowseScreen was 'upArrow from spotlight', we'll just handle 's' globally here
+        setSearchOverlayOpen(true);
       }
     }
   }, { isActive: true });
@@ -83,9 +88,35 @@ function MainApp() {
           />
         )}
         {currentScreen.kind === "search" && (
-          <Box padding={2}><Text>search - coming soon</Text></Box>
+          <Box padding={2}>
+            <Text color="yellowBright" bold>SEARCH</Text>
+            <Box marginTop={1}><Text>Press 's' anywhere to open the instant search overlay.</Text></Box>
+          </Box>
+        )}
+        {currentScreen.kind === "search-grid" && (
+          <SearchGridScreen
+            query={currentScreen.query}
+            onSelect={(anime) => push({ kind: "detail", anime })}
+            onBack={pop}
+          />
         )}
       </Box>
+
+      {searchOverlayOpen && (
+        <Box position="absolute" width="100%" height="100%">
+          <SearchOverlay
+            onSelectAnime={(anime) => {
+              setSearchOverlayOpen(false);
+              push({ kind: "detail", anime });
+            }}
+            onCommitQuery={(query) => {
+              setSearchOverlayOpen(false);
+              push({ kind: "search-grid", query });
+            }}
+            onClose={() => setSearchOverlayOpen(false)}
+          />
+        </Box>
+      )}
     </Box>
   );
 }

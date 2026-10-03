@@ -6,6 +6,7 @@ export type Screen =
   | { kind: "detail"; anime: AnilistAnime }
   | { kind: "profile" }
   | { kind: "search" }
+  | { kind: "search-grid"; query: string }
   | { kind: "playlist"; playlist: import('../db/schema.js').Playlist };
 
 export type TabId = "home" | "profile" | "search";
