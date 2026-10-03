@@ -9,8 +9,9 @@ import {
 } from "../lib/anilist.js";
 import { Thumbnail } from "../components/Thumbnail.js";
 import { useLayout } from "../lib/useLayout.js";
-import { playEpisode } from "../lib/player.js";
-import { getEntry, saveProgress, markEpisodeCompleted } from "../lib/store.js";
+import { playWithTracking } from "../lib/player.js";
+import { type WatchEntry } from "../db/schema.js";
+import { db } from "../db/index.js";
 import { theme } from "../lib/theme.js";
 
 // ── layout constants ──────────────────────────────────────────
@@ -78,7 +79,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
   const [error, setError] = useState<string | null>(null);
 
   const [focus, setFocus] = useState<FocusState>({ type: 'episodes', index: 0 });
-  const entryRef = React.useRef(getEntry(anime.id));
+  const entryRef = React.useRef<WatchEntry | null>(null);
   const [expandedDesc, setExpandedDesc] = useState(false);
   
   const [playing, setPlaying] = useState(false);
@@ -89,21 +90,23 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
   const [selectedEp, setSelectedEp] = useState(1);
   const [storeResumeEp, setStoreResumeEp] = useState<number | null>(null);
   const [storeResumeSec, setStoreResumeSec] = useState<number | null>(null);
-  const [useResume, setUseResume] = useState(true);
+  const [resumePrompt, setResumePrompt] = useState<{ ep: number, pos: number, title: string, mEps: number | null } | null>(null);
 
   useEffect(() => {
-    const entry = getEntry(anime.id);
-    if (entry) {
-      if (entry.resumeEpisode) {
-        setStoreResumeEp(entry.resumeEpisode);
-        if (entry.positionSeconds > 5) {
-          setStoreResumeSec(entry.positionSeconds);
+    db.watch.getEntry(anime.id).then(entry => {
+      if (entry) {
+        entryRef.current = entry;
+        if (entry.resumeEpisode) {
+          setStoreResumeEp(entry.resumeEpisode);
+          if (entry.positionSeconds > 5) {
+            setStoreResumeSec(entry.positionSeconds);
+          }
+          setSelectedEp(entry.resumeEpisode);
+        } else {
+          setSelectedEp(entry.lastEpisode + 1);
         }
-        setSelectedEp(entry.resumeEpisode);
-      } else {
-        setSelectedEp(entry.lastEpisode + 1);
       }
-    }
+    });
   }, [anime.id]);
   
   const activeResumeSec = (selectedEp === storeResumeEp) ? storeResumeSec : null;
@@ -138,6 +141,59 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
 
   useInput((input, key) => {
     if (playing) return;
+
+    if (resumePrompt) {
+      if (key.escape || key.backspace || input === "b") {
+        setResumePrompt(null);
+        return;
+      }
+      if (key.leftArrow || key.rightArrow) {
+        setFocus(f => ({ ...f, index: f.index === 0 ? 1 : 0 }));
+        return;
+      }
+      if (key.return) {
+        const useRes = focus.index === 0;
+        const p = resumePrompt;
+        setResumePrompt(null);
+        
+        setPlaying(true);
+        setWatchResult(null);
+        setPlayStatus(`playing ep ${p.ep} in mpv... close the player to save progress`);
+        
+        playWithTracking({
+          query: p.title,
+          episode: p.ep,
+          startAt: useRes ? p.pos : 0
+        }).then(({ pos, dur, finished }) => {
+          setPlaying(false);
+          db.watch.getEntry(anime.id).then(entry => { entryRef.current = entry; });
+          
+          if (finished) {
+            db.watch.markEpisodeCompleted(anime.id, p.ep);
+            setWatchResult(`ep ${p.ep} completed`);
+            setSelectedEp(p.ep + 1);
+            setStoreResumeEp(null);
+            setStoreResumeSec(null);
+          } else if (pos > 0) {
+            db.watch.saveProgress(
+              { anilistId: anime.id, title: p.title, cover: anime.coverImage.medium || "", totalEpisodes: p.mEps, playerQuery: p.title },
+              p.ep, pos, dur
+            );
+            const m = Math.floor(pos / 60);
+            const s = Math.floor(pos % 60).toString().padStart(2, '0');
+            setWatchResult(`saved: ep ${p.ep} at ${m}:${s}`);
+            setStoreResumeEp(p.ep);
+            setStoreResumeSec(pos);
+          } else {
+            setWatchResult(`ep ${p.ep} closed`);
+          }
+        }).catch(err => {
+          setPlaying(false);
+          setWatchResult(`Error: ${err.message}`);
+        });
+      }
+      return;
+    }
 
     if (expandedDesc && (key.escape || key.return || key.backspace || input === "b")) {
       setExpandedDesc(false);
@@ -219,38 +275,36 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
 
     if (key.return) {
       if (focus.type === 'episodes') {
-        setPlaying(true);
-        setWatchResult(null);
-        
         const q = anime.title.english || anime.title.romaji || "";
         const mEps = detail?.episodes || null;
+        
+        if (activeResumeSec && activeResumeSec > 5) {
+          setResumePrompt({ ep: selectedEp, pos: activeResumeSec, title: q, mEps });
+          setFocus({ type: 'episodes', index: 0 }); // 0 = resume, 1 = restart
+          return;
+        }
+
+        setPlaying(true);
+        setWatchResult(null);
         setPlayStatus(`playing ep ${selectedEp} in mpv... close the player to save progress`);
         
-        playEpisode({
+        playWithTracking({
           query: q,
           episode: selectedEp,
-          startAt: activeResumeSec ?? 0,
-          onPositionUpdate: (pos, dur) => {
-            saveProgress(
-              { id: anime.id, title: q, cover: anime.coverImage.medium || "", totalEpisodes: mEps, playerQuery: q },
-              selectedEp, pos, dur
-            );
-          }
+          startAt: 0
         }).then(({ pos, dur, finished }) => {
           setPlaying(false);
-          entryRef.current = getEntry(anime.id); // Refresh local ref
+          db.watch.getEntry(anime.id).then(entry => { entryRef.current = entry; });
+          
           if (finished) {
-            markEpisodeCompleted(
-              { id: anime.id, title: q, cover: anime.coverImage.medium || "", totalEpisodes: mEps, playerQuery: q },
-              selectedEp
-            );
+            db.watch.markEpisodeCompleted(anime.id, selectedEp);
             setWatchResult(`ep ${selectedEp} completed`);
             setSelectedEp(selectedEp + 1);
             setStoreResumeEp(null);
             setStoreResumeSec(null);
           } else if (pos > 0) {
-            saveProgress(
-              { id: anime.id, title: q, cover: anime.coverImage.medium || "", totalEpisodes: mEps, playerQuery: q },
+            db.watch.saveProgress(
+              { anilistId: anime.id, title: q, cover: anime.coverImage.medium || "", totalEpisodes: mEps, playerQuery: q },
               selectedEp, pos, dur
             );
             const m = Math.floor(pos / 60);
@@ -279,6 +333,24 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
 
     if (input === "w") {
       setFocus({ type: 'episodes', index: 0 });
+      return;
+    }
+
+    if (input === "p") {
+      db.playlist.list().then(playlists => {
+        if (playlists.length === 0) {
+          db.playlist.create("Favorites").then(p => {
+            db.playlist.addAnime(p.id, anime.id).then(() => {
+              setWatchResult("added to new playlist 'Favorites'");
+            });
+          });
+        } else {
+          const p = playlists[0]!;
+          db.playlist.addAnime(p.id, anime.id).then(() => {
+            setWatchResult(`added to playlist '${p.name}'`);
+          });
+        }
+      });
       return;
     }
   }, { isActive });
@@ -591,6 +663,20 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
           )}
         </Box>
       </Box>
+
+            {resumePrompt && (
+        <Box position="absolute" width="100%" height="100%" padding={2} flexDirection="column" justifyContent="center" alignItems="center">
+          <Box width="60%" borderStyle="round" borderColor={theme.border.focus} padding={2} backgroundColor={theme.bg.black} flexDirection="column">
+            <Box marginBottom={1}><Text color={theme.text.highlight} bold>RESUME EPISODE {resumePrompt.ep}?</Text></Box>
+            <Text>You stopped at {Math.floor(resumePrompt.pos / 60)}:{Math.floor(resumePrompt.pos % 60).toString().padStart(2, '0')}.</Text>
+            <Box marginTop={2} flexDirection="row" justifyContent="space-around">
+              <Text color={focus.index === 0 ? "white" : "gray"} backgroundColor={focus.index === 0 ? "#444" : undefined}> RESUME </Text>
+              <Text color={focus.index === 1 ? "white" : "gray"} backgroundColor={focus.index === 1 ? "#444" : undefined}> RESTART </Text>
+            </Box>
+            <Box marginTop={2}><Text dimColor>← → select · ENTER confirm · ESC cancel</Text></Box>
+          </Box>
+        </Box>
+      )}
 
       {/* ── PLAYER SPINNER ── */}
       {playing && (
