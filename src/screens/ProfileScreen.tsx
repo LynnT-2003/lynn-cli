@@ -3,6 +3,7 @@ import { Box, Text, useInput } from "ink";
 import { Thumbnail } from "../components/Thumbnail.js";
 import { Card } from "../components/Card.js";
 import { db } from "../db/index.js";
+import { useLayout } from "../lib/useLayout.js";
 import { theme } from "../lib/theme.js";
 import type { Profile, WatchEntry, Playlist } from "../db/schema.js";
 
@@ -49,6 +50,28 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
   const [playlistName, setPlaylistName] = useState("");
   const [selectedPlaylistIdx, setSelectedPlaylistIdx] = useState(0);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const { rows: termRows } = useLayout();
+  const [scrollOffset, setScrollOffset] = useState(0);
+
+  useEffect(() => {
+    if (activeSection === "info") {
+      setScrollOffset(0);
+    } else if (activeSection === "watching") {
+      if (termRows < 32) {
+        setScrollOffset(1);
+      } else {
+        setScrollOffset(0);
+      }
+    } else if (activeSection === "playlists") {
+      if (termRows < 28) {
+        setScrollOffset(2);
+      } else if (termRows < 52) {
+        setScrollOffset(1);
+      } else {
+        setScrollOffset(0);
+      }
+    }
+  }, [activeSection, termRows]);
   
   const [selectedWatchingIdx, setSelectedWatchingIdx] = useState(0);
   const [openingAnime, setOpeningAnime] = useState(false);
@@ -221,7 +244,8 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
 
   return (
     <Box flexDirection="column" padding={2} flexGrow={1} backgroundColor={theme.bg.black}>
-      <Box marginBottom={2} borderStyle="single" borderColor={activeSection === "info" ? theme.border.focus : theme.border.default} padding={1}>
+      {scrollOffset <= 0 && (
+        <Box marginBottom={2} borderStyle="single" borderColor={activeSection === "info" ? theme.border.focus : theme.border.default} padding={1} flexShrink={0}>
         <Box flexDirection="column">
           <Text color={theme.text.highlight} bold>YOUR PROFILE {activeSection === "info" && !editingProfile ? <Text dimColor>(Press ENTER to edit name)</Text> : ""}</Text>
           <Box marginTop={1}>
@@ -240,7 +264,10 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
         </Box>
       </Box>
 
-      <Box marginBottom={2} borderStyle="single" borderColor={activeSection === "watching" ? theme.border.focus : theme.border.default} padding={1}>
+      )}
+
+      {scrollOffset <= 1 && (
+        <Box marginBottom={2} borderStyle="single" borderColor={activeSection === "watching" ? theme.border.focus : theme.border.default} padding={1} flexShrink={0}>
         <Box flexDirection="column">
           <Text color={theme.text.highlight} bold>CONTINUE WATCHING</Text>
           <Box marginTop={1} flexDirection="row" overflow="hidden">
@@ -278,7 +305,10 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
         </Box>
       </Box>
 
-      <Box borderStyle="single" borderColor={activeSection === "playlists" ? theme.border.focus : theme.border.default} padding={1}>
+      )}
+
+      {scrollOffset <= 2 && (
+        <Box borderStyle="single" borderColor={activeSection === "playlists" ? theme.border.focus : theme.border.default} padding={1} flexShrink={0}>
         <Box flexDirection="column">
           <Text color={theme.text.highlight} bold>PLAYLISTS</Text>
           <Box marginTop={1} flexDirection="row" overflow="hidden">
@@ -340,7 +370,9 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
         </Box>
       </Box>
       
-      <Box marginTop={1}>
+      )}
+      
+      <Box marginTop={1} flexShrink={0}>
         <Text dimColor>↑↓ select · ← sidebar {activeSection === "playlists" ? "· c create · s share" : ""}</Text>
       </Box>
     </Box>
