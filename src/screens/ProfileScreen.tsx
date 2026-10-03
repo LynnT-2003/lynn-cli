@@ -50,7 +50,28 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
   const [playlistName, setPlaylistName] = useState("");
   const [selectedPlaylistIdx, setSelectedPlaylistIdx] = useState(0);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const { rows: termRows } = useLayout();
+  const [scrollOffset, setScrollOffset] = useState(0);
 
+  useEffect(() => {
+    if (activeSection === "info") {
+      setScrollOffset(0);
+    } else if (activeSection === "watching") {
+      if (termRows < 32) {
+        setScrollOffset(1);
+      } else {
+        setScrollOffset(0);
+      }
+    } else if (activeSection === "playlists") {
+      if (termRows < 28) {
+        setScrollOffset(2);
+      } else if (termRows < 52) {
+        setScrollOffset(1);
+      } else {
+        setScrollOffset(0);
+      }
+    }
+  }, [activeSection, termRows]);
   
   const [selectedWatchingIdx, setSelectedWatchingIdx] = useState(0);
   const [openingAnime, setOpeningAnime] = useState(false);
@@ -221,56 +242,45 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
     return <Box padding={2}><Text>Loading profile...</Text></Box>;
   }
 
-  // Sections: 0=info, 1=watching, 2=playlists
-  // Only render the focused section + its immediate neighbours to prevent Ink overflow clipping.
-  // This mirrors BrowseScreen's scrollOffset/slice pattern.
-  const sectionIndex = activeSection === "info" ? 0 : activeSection === "watching" ? 1 : 2;
-
   return (
-    <Box flexDirection="column" padding={1} flexGrow={1} overflow="hidden">
-      {/* Breadcrumb nav — always visible */}
-      <Box marginBottom={1} flexDirection="row" gap={2}>
-        <Text color={sectionIndex === 0 ? theme.border.focus : theme.text.dim} bold={sectionIndex === 0}>● Profile</Text>
-        <Text color={theme.text.dim}>›</Text>
-        <Text color={sectionIndex === 1 ? theme.border.focus : theme.text.dim} bold={sectionIndex === 1}>● Continue Watching</Text>
-        <Text color={theme.text.dim}>›</Text>
-        <Text color={sectionIndex === 2 ? theme.border.focus : theme.text.dim} bold={sectionIndex === 2}>● Playlists</Text>
+    <Box flexDirection="column" padding={1} flexGrow={1} backgroundColor={theme.bg.black}>
+      {scrollOffset <= 0 && (
+        <Box marginBottom={1} borderStyle="single" borderColor={activeSection === "info" ? theme.border.focus : theme.border.default} paddingX={1} paddingY={0} flexShrink={0}>
+        <Box flexDirection="column">
+          <Text color={theme.text.highlight} bold>YOUR PROFILE {activeSection === "info" && !editingProfile ? <Text dimColor>(Press ENTER to edit name)</Text> : ""}</Text>
+          <Box marginTop={1}>
+            <Text color={theme.text.accent}>Name: </Text>
+            {editingProfile ? (
+              <Text>{editName}<Text inverse> </Text></Text>
+            ) : (
+              <Text>{profile.name || "Anonymous"}</Text>
+            )}
+          </Box>
+          <Box>
+            <Text color={theme.text.accent}>Genres: </Text>
+            <Text>{profile.genres.length ? profile.genres.join(", ") : "None"}</Text>
+          </Box>
+          {editingProfile && <Box marginTop={1}><Text dimColor>ENTER to save · ESC to cancel</Text></Box>}
+        </Box>
       </Box>
 
-      {/* SECTION: Profile Info */}
-      {sectionIndex === 0 && (
-        <Box borderStyle="single" borderColor={theme.border.focus} paddingX={1} paddingY={1}>
-          <Box flexDirection="column">
-            <Text color={theme.text.highlight} bold>YOUR PROFILE {!editingProfile ? <Text dimColor>(ENTER to edit name)</Text> : ""}</Text>
-            <Box marginTop={1}>
-              <Text color={theme.text.accent}>Name: </Text>
-              {editingProfile ? (
-                <Text>{editName}<Text inverse> </Text></Text>
-              ) : (
-                <Text>{profile.name || "Anonymous"}</Text>
-              )}
-            </Box>
-            <Box>
-              <Text color={theme.text.accent}>Genres: </Text>
-              <Text>{profile.genres.length ? profile.genres.join(", ") : "None"}</Text>
-            </Box>
-            {editingProfile && <Box marginTop={1}><Text dimColor>ENTER to save · ESC to cancel</Text></Box>}
-          </Box>
-        </Box>
       )}
 
-      {/* SECTION: Continue Watching */}
-      {sectionIndex === 1 && (
-        <Box borderStyle="single" borderColor={theme.border.focus} paddingX={1} paddingY={1}>
-          <Box flexDirection="column">
-            <Text color={theme.text.highlight} bold>CONTINUE WATCHING</Text>
-            <Box marginTop={1} flexDirection="row">
-              {watching.length === 0 ? <Text dimColor>Nothing in your watch history yet.</Text> : null}
-              {watching.slice(0, 3).map((w, i) => {
-                const isFocused = selectedWatchingIdx === i;
+      {scrollOffset <= 1 && (
+        <Box marginBottom={1} borderStyle="single" borderColor={activeSection === "watching" ? theme.border.focus : theme.border.default} paddingX={1} paddingY={0} flexShrink={0}>
+        <Box flexDirection="column">
+          <Text color={theme.text.highlight} bold>CONTINUE WATCHING</Text>
+          <Box marginTop={1} flexDirection="row" overflow="hidden">
+            {watching.length === 0 ? <Text dimColor>Nothing yet.</Text> : null}
+            
+            {
+              watching.slice(0, 3).map((w, i) => {
+                const isFocused = activeSection === "watching" && selectedWatchingIdx === i;
+                
                 const m = Math.floor(w.positionSeconds / 60);
                 const s = Math.floor(w.positionSeconds % 60).toString().padStart(2, '0');
                 const pct = w.durationSeconds ? Math.min(100, Math.floor((w.positionSeconds / w.durationSeconds) * 100)) : 0;
+                
                 return (
                   <Card key={w.anilistId} isFocused={isFocused} width={24} height={17}>
                     <Box alignSelf="center">
@@ -284,86 +294,86 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
                       <Text dimColor>{m}:{s}</Text>
                     </Box>
                     <Box>
-                      <Text color={isFocused ? "cyan" : "gray"}>{'█'.repeat(Math.floor((pct / 100) * 20)) + '▒'.repeat(20 - Math.floor((pct / 100) * 20))}</Text>
+                      <Text color={isFocused ? "cyan" : "gray"}>{"█".repeat(Math.floor((pct / 100) * 20)) + "▒".repeat(20 - Math.floor((pct / 100) * 20))}</Text>
                     </Box>
                     {openingAnime && isFocused && <Box><Text color="yellow">Loading...</Text></Box>}
                   </Card>
                 );
-              })}
-            </Box>
+              })
+            }
           </Box>
         </Box>
+      </Box>
+
       )}
 
-      {/* SECTION: Playlists */}
-      {sectionIndex === 2 && (
-        <Box borderStyle="single" borderColor={theme.border.focus} paddingX={1} paddingY={1}>
-          <Box flexDirection="column">
-            <Text color={theme.text.highlight} bold>PLAYLISTS</Text>
-            <Box marginTop={1} flexDirection="row">
-              {playlists.length === 0 && !creatingPlaylist ? <Text dimColor>No playlists yet. Press C to create one.</Text> : null}
-              {playlists.slice(0, 3).map((p, i) => {
-                const isFocused = selectedPlaylistIdx === i;
-                const covers = p.animeIds.map(id => playlistCovers[id]).filter(Boolean) as string[];
+      {scrollOffset <= 2 && (
+        <Box borderStyle="single" borderColor={activeSection === "playlists" ? theme.border.focus : theme.border.default} paddingX={1} paddingY={0} flexShrink={0}>
+        <Box flexDirection="column">
+          <Text color={theme.text.highlight} bold>PLAYLISTS</Text>
+          <Box marginTop={1} flexDirection="row" overflow="hidden">
+            {playlists.length === 0 && !creatingPlaylist ? <Text dimColor>No playlists created.</Text> : null}
+            
+            {
+              playlists.slice(0, 3).map((p, i) => {
+                const isFocused = activeSection === "playlists" && selectedPlaylistIdx === i;
+                const covers = p.animeIds.map(id => playlistCovers[id]).filter(Boolean);
+                
                 return (
                   <Card key={p.id} isFocused={isFocused} width={24} height={16}>
                     <Box alignSelf="center" width={20} height={10} flexDirection="column">
                       {covers.length === 0 ? (
-                        <Box flexGrow={1} borderStyle="single" borderColor={theme.border.default} justifyContent="center" alignItems="center">
-                          <Text dimColor>EMPTY</Text>
-                        </Box>
+                         <Box flexGrow={1} borderStyle="single" borderColor={theme.border.default} justifyContent="center" alignItems="center">
+                           <Text dimColor>EMPTY</Text>
+                         </Box>
                       ) : covers.length < 4 ? (
-                        <Thumbnail url={covers[0]} cols={20} rows={10} />
+                         <Thumbnail url={covers[0] || null} cols={20} rows={10} />
                       ) : (
-                        <Box flexDirection="column">
-                          <Box flexDirection="row">
-                            <Thumbnail url={covers[0]} cols={10} rows={5} />
-                            <Thumbnail url={covers[1]} cols={10} rows={5} />
-                          </Box>
-                          <Box flexDirection="row">
-                            <Thumbnail url={covers[2]} cols={10} rows={5} />
-                            <Thumbnail url={covers[3]} cols={10} rows={5} />
-                          </Box>
-                        </Box>
+                         <Box flexDirection="column">
+                           <Box flexDirection="row">
+                             <Thumbnail url={covers[0] || null} cols={10} rows={5} />
+                             <Thumbnail url={covers[1] || null} cols={10} rows={5} />
+                           </Box>
+                           <Box flexDirection="row">
+                             <Thumbnail url={covers[2] || null} cols={10} rows={5} />
+                             <Thumbnail url={covers[3] || null} cols={10} rows={5} />
+                           </Box>
+                         </Box>
                       )}
                     </Box>
                     <Box height={2} overflow="hidden" marginTop={1}>
                       <Text color={isFocused ? "white" : "gray"} bold>{p.name}</Text>
                     </Box>
                     <Box>
-                      <Text dimColor>{p.animeIds.length} item{p.animeIds.length !== 1 ? 's' : ''}</Text>
+                      <Text dimColor>{p.animeIds.length} items</Text>
                     </Box>
                   </Card>
                 );
-              })}
-            </Box>
+              })
+            }
 
-            {exportMessage && (
-              <Box marginTop={1}>
-                <Text color="greenBright">{exportMessage}</Text>
-              </Box>
-            )}
-
-            {creatingPlaylist && (
-              <Box marginTop={1} flexDirection="column">
-                <Text color={theme.text.accent}>New Playlist Name:</Text>
-                <Text>{playlistName}<Text inverse> </Text></Text>
-                <Text dimColor>ENTER to create · ESC to cancel</Text>
-              </Box>
-            )}
           </Box>
-        </Box>
-      )}
 
-      {/* Footer hint */}
-      <Box marginTop={1}>
-        <Text dimColor>
-          {sectionIndex === 2
-            ? '↑↓ sections · ←→ cards · ENTER open · c create · s share · ← sidebar'
-            : sectionIndex === 1
-            ? '↑↓ sections · ←→ cards · ENTER open · ← sidebar'
-            : '↑↓ sections · ENTER edit · ← sidebar'}
-        </Text>
+          {exportMessage && activeSection === "playlists" && (
+            <Box marginTop={1}>
+              <Text color="greenBright">{exportMessage}</Text>
+            </Box>
+          )}
+
+          {creatingPlaylist && (
+            <Box marginTop={1} flexDirection="column">
+              <Text color={theme.text.accent}>New Playlist Name:</Text>
+              <Text>{playlistName}<Text inverse> </Text></Text>
+              <Text dimColor>ENTER to create · ESC to cancel</Text>
+            </Box>
+          )}
+        </Box>
+      </Box>
+      
+      )}
+      
+      <Box marginTop={1} flexShrink={0}>
+        <Text dimColor>↑↓ select · ← sidebar {activeSection === "playlists" ? "· c create · s share" : ""}</Text>
       </Box>
     </Box>
   );
