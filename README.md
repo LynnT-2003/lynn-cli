@@ -369,6 +369,25 @@ LYNN checks for a player with `command -v`, in the order **IINA → mpv → VLC*
 | mpv | `--referrer=` | `--sub-file=` | `--force-media-title=` |
 | VLC | `--http-referrer=` | `:input-slave=` | `--meta-title=` |
 
+LYNN now also features **Watch Tracking**, actively monitoring playback through Unix IPC sockets.
+
+```mermaid
+flowchart LR
+    A[LYNN CLI] -- "Launch" --> B((Player))
+    B -. "Create Socket" .-> C[/tmp/lynn-mpv.sock/]
+    A -- "IPC connect()" --> C
+    C -- "time-pos & duration" --> A
+    A -- "Save" --> D[(Local SQLite)]
+```
+
+If the player supports IPC (`mpv` natively, or `IINA` via `--mpv-input-ipc-server`), LYNN actively streams playback events. If you watch past 90% of an episode, it's marked as complete, and the next episode will be automatically queued up in the UI.
+
+---
+### 6. Local Database & Playlists
+
+All user progress, watch history, and playlists are stored locally using SQLite (`~/.lynn/library.json` backed by local disk).
+Playlists can be fully managed, shared, and imported using a custom `lynn:playlist:...` encoded base64 string.
+
 ---
 ## 🩺 Troubleshooting
 

@@ -588,7 +588,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
                   );
                 })()}
               </Box>
-              {watchResult && <Text color={theme.text.success}>↳ {watchResult}</Text>}
+              {watchResult && <Text color="cyan">↳ {watchResult}</Text>}
             </Box>
 
             <Box flexDirection="row" flexGrow={2} overflow="hidden">
