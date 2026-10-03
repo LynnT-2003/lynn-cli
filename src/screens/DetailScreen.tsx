@@ -102,14 +102,17 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
     db.watch.getEntry(anime.id).then(entry => {
       if (entry) {
         entryRef.current = entry;
-        if (entry.resumeEpisode) {
-          setStoreResumeEp(entry.resumeEpisode);
+        const resEp = entry.resumeEpisode;
+        if (resEp) {
+          setStoreResumeEp(resEp);
           if (entry.positionSeconds > 5) {
             setStoreResumeSec(entry.positionSeconds);
           }
-          setSelectedEp(entry.resumeEpisode);
+          setSelectedEp(resEp);
+          setFocus(f => f.type === 'episodes' ? { ...f, index: Math.max(0, resEp - 1) } : f);
         } else {
           setSelectedEp(entry.lastEpisode + 1);
+          setFocus(f => f.type === 'episodes' ? { ...f, index: Math.max(0, entry.lastEpisode) } : f);
         }
       }
     });
