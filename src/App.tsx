@@ -12,6 +12,8 @@ import { LayoutProvider, useLayout } from "./lib/useLayout.js";
 import { useNavigation } from "./lib/navigation.js";
 import { Sidebar } from "./components/Sidebar.js";
 
+import { PlaylistScreen } from "./screens/PlaylistScreen.js";
+
 function MainApp() {
   const { activeTab, currentScreen, push, pop, switchTab } = useNavigation();
   const { rows: termRows } = useLayout();
@@ -68,6 +70,15 @@ function MainApp() {
           <ProfileScreen 
             isFocused={!sidebarFocused}
             onFocusSidebar={() => setSidebarFocused(true)}
+            onOpenPlaylist={(playlist) => push({ kind: "playlist", playlist })}
+          />
+        )}
+        {currentScreen.kind === "playlist" && (
+          <PlaylistScreen 
+            playlist={currentScreen.playlist}
+            onSelect={(anime) => push({ kind: "detail", anime })}
+            onBack={pop}
+            isFocused={!sidebarFocused}
           />
         )}
         {currentScreen.kind === "search" && (

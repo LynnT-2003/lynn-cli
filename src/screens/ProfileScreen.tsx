@@ -7,9 +7,10 @@ import type { Profile, WatchEntry, Playlist } from "../db/schema.js";
 type Props = {
   isFocused?: boolean;
   onFocusSidebar?: () => void;
+  onOpenPlaylist?: (playlist: Playlist) => void;
 };
 
-export function ProfileScreen({ isFocused = true, onFocusSidebar }: Props) {
+export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [watching, setWatching] = useState<WatchEntry[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -82,6 +83,8 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar }: Props) {
       if (activeSection === "info") {
         setEditName(profile?.name || "");
         setEditingProfile(true);
+      } else if (activeSection === "playlists" && playlists[selectedPlaylistIdx]) {
+        if (onOpenPlaylist) onOpenPlaylist(playlists[selectedPlaylistIdx]);
       }
       return;
     }
