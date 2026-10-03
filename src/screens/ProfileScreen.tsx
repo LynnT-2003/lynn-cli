@@ -246,11 +246,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
           <Box marginTop={1} flexDirection="row" overflow="hidden">
             {watching.length === 0 ? <Text dimColor>Nothing yet.</Text> : null}
             
-            {activeSection !== "watching" ? (
-              <Box flexDirection="column">
-                <Text dimColor>{watching.length} items (Select to expand)</Text>
-              </Box>
-            ) : (
+            {
               watching.slice(0, 3).map((w, i) => {
                 const isFocused = activeSection === "watching" && selectedWatchingIdx === i;
                 
@@ -277,7 +273,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
                   </Card>
                 );
               })
-            )}
+            }
           </Box>
         </Box>
       </Box>
@@ -288,11 +284,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
           <Box marginTop={1} flexDirection="row" overflow="hidden">
             {playlists.length === 0 && !creatingPlaylist ? <Text dimColor>No playlists created.</Text> : null}
             
-            {activeSection !== "playlists" ? (
-              <Box flexDirection="column">
-                <Text dimColor>{playlists.length} items (Select to expand)</Text>
-              </Box>
-            ) : (
+            {
               playlists.slice(0, 3).map((p, i) => {
                 const isFocused = activeSection === "playlists" && selectedPlaylistIdx === i;
                 const covers = p.animeIds.map(id => playlistCovers[id]).filter(Boolean);
@@ -328,7 +320,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
                   </Card>
                 );
               })
-            )}
+            }
 
           </Box>
 
