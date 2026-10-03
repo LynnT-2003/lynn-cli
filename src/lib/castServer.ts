@@ -7,16 +7,26 @@ import { watchRepo } from "../db/repositories/watchRepo.js";
 import { client } from "../db/client.js";
 import * as net from "node:net";
 
+// prefer a real LAN address the phone can reach. VPN tunnels (tailscale/warp
+// utun*, 100.64/10 CGNAT) come first in some orders and are unreachable from
+// the phone. 172.20.10.x is the iOS Personal Hotspot subnet.
 function getLanIp() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]!) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        return iface.address;
-      }
+  const candidates: { name: string; address: string }[] = [];
+  for (const [name, list] of Object.entries(os.networkInterfaces())) {
+    for (const iface of list ?? []) {
+      if (iface.family === "IPv4" && !iface.internal) candidates.push({ name, address: iface.address });
     }
   }
-  return null;
+  const isTunnel = (c: { name: string; address: string }) =>
+    /^(utun|tun|tap|ipsec|ppp|bridge|awdl|llw)/.test(c.name) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(c.address);
+  const isPrivate = (a: string) => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a);
+  const lan = candidates.filter(c => !isTunnel(c));
+  return (
+    lan.find(c => c.address.startsWith("172.20.10."))?.address ??
+    lan.find(c => isPrivate(c.address))?.address ??
+    lan[0]?.address ??
+    null
+  );
 }
 
 export async function startCastServer(
@@ -38,6 +48,16 @@ export async function startCastServer(
   const cover = existingEntry?.cover || null;
 
   const streamCache = new Map<number, any>();
+
+  // Fetch hls.js once at server start so Chrome works fully offline (no CDN needed).
+  // Falls back to empty string — the page already guards with `typeof Hls !== 'undefined'`.
+  let hlsJsBundle = "";
+  try {
+    const r = await gotScraping.get("https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js");
+    hlsJsBundle = r.body;
+  } catch {
+    // No internet — hls.js unavailable; iOS Safari plays natively anyway.
+  }
 
   let lastActive = Date.now();
   let server: http.Server;
@@ -64,6 +84,58 @@ export async function startCastServer(
       req.on("error", reject);
     });
   };
+
+  /**
+   * Proxy a binary segment (ts/mp4 frag) through to the response.
+   * Key invariants:
+   *   - decompress: false → raw bytes flow through, no mismatch with content-encoding
+   *   - Only content-type and content-length are forwarded; everything else
+   *     (transfer-encoding, content-encoding, keep-alive, etc.) is dropped.
+   *   - CORS header is always set so browsers don't block the XHR.
+   */
+  function proxySegment(upstream: string, referer: string, res: http.ServerResponse) {
+    try {
+      const stream = gotScraping.stream(upstream, {
+        headers: { referer },
+        decompress: false,
+      });
+      stream.once("response", (r: any) => {
+        const headers: http.OutgoingHttpHeaders = {
+          "access-control-allow-origin": "*",
+          "content-type": (r.headers["content-type"] as string) || "video/mp2t",
+        };
+        if (r.headers["content-length"]) {
+          headers["content-length"] = r.headers["content-length"] as string;
+        }
+        res.writeHead(r.statusCode || 200, headers);
+      });
+      stream.on("error", () => {
+        if (!res.headersSent) res.writeHead(502);
+        res.end();
+      });
+      // phone seeks or closes the tab → stop downloading from the CDN
+      res.on("close", () => stream.destroy());
+      stream.pipe(res);
+    } catch {
+      if (!res.headersSent) res.writeHead(502);
+      res.end();
+    }
+  }
+
+  /** Rewrite all URI lines in an m3u8 through the /seg proxy. */
+  function rewriteM3u8(content: string, referer: string, baseUrl: string): string {
+    // Normalise CRLF so line splitting always works.
+    const lines = content.replace(/\r\n/g, "\n").split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!.trim();
+      if (line && !line.startsWith("#")) {
+        let url = line;
+        if (!url.startsWith("http")) url = baseUrl + url;
+        lines[i] = `/seg?u=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer)}`;
+      }
+    }
+    return lines.join("\n");
+  }
 
   server = http.createServer(async (req, res) => {
     try {
@@ -103,8 +175,8 @@ export async function startCastServer(
     button:active:not(:disabled) { background: #555; }
     #message { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); z-index: 10; font-size: 1.2em; text-align: center; padding: 20px; display: none; }
   </style>
-  <!-- Fallback HLS.js, requires internet but core playback works natively on iOS -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <!-- hls.js served locally — no CDN, works on hotspot / offline -->
+  <script src="/hls.js"></script>
 </head>
 <body>
   <div id="header">
@@ -112,7 +184,7 @@ export async function startCastServer(
     <div id="ep-title">Loading...</div>
   </div>
   <div id="video-container">
-    <video id="video" controls autoplay playsinline crossorigin="anonymous"></video>
+    <video id="video" controls autoplay playsinline></video>
     <div id="message"></div>
   </div>
   <div id="controls">
@@ -165,8 +237,10 @@ export async function startCastServer(
         }
 
         if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          // Native HLS — iOS Safari, no internet required.
           video.src = data.url;
-        } else if (Hls.isSupported()) {
+        } else if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+          // Fallback via hls.js CDN — requires internet, best-effort only.
           hls = new Hls();
           hls.loadSource(data.url);
           hls.attachMedia(video);
@@ -210,42 +284,44 @@ export async function startCastServer(
     });
 
     // Progress reporting
-    function reportProgress() {
-      if (video.paused || !video.duration) return;
+    // sendProgress always fires regardless of paused state (used for pause/seeked events).
+    // reportProgress only fires when playing (used by the interval to avoid stale pings while paused).
+    function sendProgress() {
+      if (!video.duration) return;
       fetch("/progress", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ episode: currentEp, pos: video.currentTime, dur: video.duration })
       }).catch(() => {});
     }
+    function reportProgress() {
+      if (video.paused || !video.duration) return;
+      sendProgress();
+    }
 
     setInterval(reportProgress, 10000);
+    // Pause fires when the user locks their phone — save immediately, not waiting for interval.
     video.addEventListener("pause", () => {
       if (video.duration && video.currentTime < video.duration) {
-        reportProgress();
+        sendProgress();
       }
     });
-    video.addEventListener("seeked", reportProgress);
+    video.addEventListener("seeked", sendProgress);
 
-    // Last attempt flush
+    // Last-attempt flush: beacon fires even if the tab is force-killed.
+    // Browsers don't guarantee delivery, but it works in the common case.
+    function beaconProgress() {
+      if (!video.duration) return;
+      navigator.sendBeacon("/progress", JSON.stringify({
+        episode: currentEp,
+        pos: video.currentTime,
+        dur: video.duration
+      }));
+    }
     window.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden" && video.duration) {
-        navigator.sendBeacon("/progress", JSON.stringify({
-          episode: currentEp,
-          pos: video.currentTime,
-          dur: video.duration
-        }));
-      }
+      if (document.visibilityState === "hidden") beaconProgress();
     });
-    window.addEventListener("pagehide", () => {
-      if (video.duration) {
-        navigator.sendBeacon("/progress", JSON.stringify({
-          episode: currentEp,
-          pos: video.currentTime,
-          dur: video.duration
-        }));
-      }
-    });
+    window.addEventListener("pagehide", beaconProgress);
   </script>
 </body>
 </html>
@@ -326,6 +402,12 @@ export async function startCastServer(
         return;
       }
 
+      if (req.method === "GET" && pathname === "/hls.js") {
+        res.writeHead(200, { "content-type": "application/javascript", "cache-control": "public, max-age=86400" });
+        res.end(hlsJsBundle);
+        return;
+      }
+
       if (req.method === "GET" && pathname === "/playlist.m3u8") {
         const epStr = parsedUrl.searchParams.get("ep");
         if (!epStr) { res.writeHead(400); res.end(); return; }
@@ -341,31 +423,13 @@ export async function startCastServer(
             streamCache.set(epNum, streamInfo);
           }
           const m3u8Res = await gotScraping.get(streamInfo.videoUrl, { headers: { referer: streamInfo.referer } });
-          let m3u8 = m3u8Res.body;
-          
           const baseUrl = streamInfo.videoUrl.substring(0, streamInfo.videoUrl.lastIndexOf('/') + 1);
-
-          // Rewrite URLs in m3u8
-          const lines = m3u8.split('\\n');
-          for (let i = 0; i < lines.length; i++) {
-            const line = lines[i]!.trim();
-            if (line && !line.startsWith('#')) {
-              let url = line;
-              if (!url.startsWith('http')) {
-                url = baseUrl + url;
-              }
-              // Route variant m3u8 and ts segments through /seg
-              // Since it's a m3u8, we should probably rewrite it carefully
-              // If it's a variant playlist (.m3u8), we could route it to /playlist.m3u8?u=... but /seg can handle it if /seg also rewrites m3u8s.
-              // Wait, the prompt says "recursive rewrite if a variant itself is an m3u8. GET /seg?u=<encoded-url> : proxies that single request... streams through unmodified".
-              // Oh, if /seg proxies unmodified, then we MUST rewrite the variant m3u8 here if it's a master playlist.
-              // Actually, hianimeGetStreamUrl returns the MASTER playlist. The variants are m3u8s.
-              lines[i] = `/seg?u=${encodeURIComponent(url)}&referer=${encodeURIComponent(streamInfo.referer)}`;
-            }
-          }
-          
-          res.writeHead(200, { "Content-Type": "application/vnd.apple.mpegurl" });
-          res.end(lines.join('\\n'));
+          const rewritten = rewriteM3u8(m3u8Res.body, streamInfo.referer, baseUrl);
+          res.writeHead(200, {
+            "content-type": "application/vnd.apple.mpegurl",
+            "access-control-allow-origin": "*",
+          });
+          res.end(rewritten);
         } catch (e) {
           res.writeHead(500); res.end();
         }
@@ -377,47 +441,25 @@ export async function startCastServer(
         const ref = parsedUrl.searchParams.get("referer") || "";
         if (!u) { res.writeHead(400); res.end(); return; }
 
-        // Determine if it's an m3u8 variant that needs rewriting
-        if (u.includes('.m3u8')) {
-           try {
-             const m3u8Res = await gotScraping.get(u, { headers: { referer: ref } });
-             let m3u8 = m3u8Res.body;
-             const baseUrl = u.substring(0, u.lastIndexOf('/') + 1);
-
-             const lines = m3u8.split('\\n');
-             for (let i = 0; i < lines.length; i++) {
-               const line = lines[i]!.trim();
-               if (line && !line.startsWith('#')) {
-                 let url = line;
-                 if (!url.startsWith('http')) {
-                   url = baseUrl + url;
-                 }
-                 lines[i] = `/seg?u=${encodeURIComponent(url)}&referer=${encodeURIComponent(ref)}`;
-               }
-             }
-             res.writeHead(200, { "Content-Type": "application/vnd.apple.mpegurl" });
-             res.end(lines.join('\\n'));
-           } catch (e) {
-             res.writeHead(500); res.end();
-           }
-           return;
+        // Variant playlists need URL rewriting; raw segments are passed through as-is.
+        if (u.includes(".m3u8")) {
+          try {
+            const m3u8Res = await gotScraping.get(u, { headers: { referer: ref } });
+            const baseUrl = u.substring(0, u.lastIndexOf("/") + 1);
+            const rewritten = rewriteM3u8(m3u8Res.body, ref, baseUrl);
+            res.writeHead(200, {
+              "content-type": "application/vnd.apple.mpegurl",
+              "access-control-allow-origin": "*",
+            });
+            res.end(rewritten);
+          } catch {
+            res.writeHead(502); res.end();
+          }
+          return;
         }
 
-        // Just proxy the segment
-        try {
-          const stream = gotScraping.stream(u, { headers: { referer: ref } });
-          stream.on("response", (r) => {
-            res.writeHead(r.statusCode || 200, r.headers as http.OutgoingHttpHeaders);
-          });
-          stream.on("error", () => {
-            if (!res.headersSent) res.writeHead(500);
-            res.end();
-          });
-          stream.pipe(res);
-        } catch (e) {
-          if (!res.headersSent) res.writeHead(500);
-          res.end();
-        }
+        // Binary segment — proxy with clean headers (decompress:false avoids content-encoding mismatch).
+        proxySegment(u, ref, res);
         return;
       }
 
@@ -438,17 +480,8 @@ export async function startCastServer(
           if (!streamInfo.subtitleUrl) {
             res.writeHead(404); res.end(); return;
           }
-
-          const stream = gotScraping.stream(streamInfo.subtitleUrl, { headers: { referer: streamInfo.referer } });
-          stream.on("response", (r) => {
-            res.writeHead(r.statusCode || 200, r.headers as http.OutgoingHttpHeaders);
-          });
-          stream.on("error", () => {
-            if (!res.headersSent) res.writeHead(500);
-            res.end();
-          });
-          stream.pipe(res);
-        } catch (e) {
+          proxySegment(streamInfo.subtitleUrl, streamInfo.referer, res);
+        } catch {
           if (!res.headersSent) res.writeHead(500);
           res.end();
         }
