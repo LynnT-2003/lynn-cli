@@ -5,6 +5,7 @@ import { gotScraping } from "got-scraping";
 import { findHianimeAnime, hianimeEpisodes, hianimeGetStreamUrl } from "./hianime.js";
 import { watchRepo } from "../db/repositories/watchRepo.js";
 import { client } from "../db/client.js";
+import * as net from "node:net";
 
 function getLanIp() {
   const interfaces = os.networkInterfaces();
@@ -35,6 +36,8 @@ export async function startCastServer(
   const dbData = await client.get();
   const existingEntry = dbData.entries[anilistId];
   const cover = existingEntry?.cover || null;
+
+  const streamCache = new Map<number, any>();
 
   let lastActive = Date.now();
   let server: http.Server;
@@ -270,9 +273,13 @@ export async function startCastServer(
         }
 
         try {
-          const streamInfo = await hianimeGetStreamUrl(targetEp.dataId, "sub");
-          const playlistUrl = \`/playlist.m3u8?ep=\${ep}\`;
-          const subUrl = streamInfo.subtitleUrl ? \`/subs.vtt?ep=\${ep}\` : null;
+          let streamInfo = streamCache.get(ep);
+          if (!streamInfo) {
+            streamInfo = await hianimeGetStreamUrl(targetEp.dataId, "sub");
+            streamCache.set(ep, streamInfo);
+          }
+          const playlistUrl = `/playlist.m3u8?ep=${ep}`;
+          const subUrl = streamInfo.subtitleUrl ? `/subs.vtt?ep=${ep}` : null;
           
           let isLast = false;
           if (totalEpisodes !== null) {
@@ -287,7 +294,7 @@ export async function startCastServer(
           res.end(JSON.stringify({
             url: playlistUrl,
             subUrl,
-            title: \`Episode \${ep}\`,
+            title: `Episode ${ep}`,
             isLast
           }));
         } catch (e) {
@@ -327,7 +334,12 @@ export async function startCastServer(
         if (!targetEp) { res.writeHead(404); res.end(); return; }
 
         try {
-          const streamInfo = await hianimeGetStreamUrl(targetEp.dataId, "sub");
+          const epNum = parseInt(epStr, 10);
+          let streamInfo = streamCache.get(epNum);
+          if (!streamInfo) {
+            streamInfo = await hianimeGetStreamUrl(targetEp.dataId, "sub");
+            streamCache.set(epNum, streamInfo);
+          }
           const m3u8Res = await gotScraping.get(streamInfo.videoUrl, { headers: { referer: streamInfo.referer } });
           let m3u8 = m3u8Res.body;
           
@@ -348,7 +360,7 @@ export async function startCastServer(
               // Wait, the prompt says "recursive rewrite if a variant itself is an m3u8. GET /seg?u=<encoded-url> : proxies that single request... streams through unmodified".
               // Oh, if /seg proxies unmodified, then we MUST rewrite the variant m3u8 here if it's a master playlist.
               // Actually, hianimeGetStreamUrl returns the MASTER playlist. The variants are m3u8s.
-              lines[i] = \`/seg?u=\${encodeURIComponent(url)}&referer=\${encodeURIComponent(streamInfo.referer)}\`;
+              lines[i] = `/seg?u=${encodeURIComponent(url)}&referer=${encodeURIComponent(streamInfo.referer)}`;
             }
           }
           
@@ -380,7 +392,7 @@ export async function startCastServer(
                  if (!url.startsWith('http')) {
                    url = baseUrl + url;
                  }
-                 lines[i] = \`/seg?u=\${encodeURIComponent(url)}&referer=\${encodeURIComponent(ref)}\`;
+                 lines[i] = `/seg?u=${encodeURIComponent(url)}&referer=${encodeURIComponent(ref)}`;
                }
              }
              res.writeHead(200, { "Content-Type": "application/vnd.apple.mpegurl" });
@@ -417,7 +429,12 @@ export async function startCastServer(
         if (!targetEp) { res.writeHead(404); res.end(); return; }
 
         try {
-          const streamInfo = await hianimeGetStreamUrl(targetEp.dataId, "sub");
+          const epNum = parseInt(epStr, 10);
+          let streamInfo = streamCache.get(epNum);
+          if (!streamInfo) {
+            streamInfo = await hianimeGetStreamUrl(targetEp.dataId, "sub");
+            streamCache.set(epNum, streamInfo);
+          }
           if (!streamInfo.subtitleUrl) {
             res.writeHead(404); res.end(); return;
           }
@@ -451,7 +468,7 @@ export async function startCastServer(
     server.listen(0, "0.0.0.0", () => {
       const port = (server.address() as net.AddressInfo).port;
       resolve({
-        url: \`http://\${lanIp}:\${port}/\`,
+        url: `http://${lanIp}:${port}/`,
         stop
       });
     });

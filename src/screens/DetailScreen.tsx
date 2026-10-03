@@ -13,6 +13,8 @@ import { playWithTracking, getPlayerInfo } from "../lib/player.js";
 import { type WatchEntry, type Playlist } from "../db/schema.js";
 import { db } from "../db/index.js";
 import { theme } from "../lib/theme.js";
+import { startCastServer } from "../lib/castServer.js";
+import qrcode from "qrcode-terminal";
 
 // ── layout constants ──────────────────────────────────────────
 
@@ -98,6 +100,14 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [playlistFocusIdx, setPlaylistFocusIdx] = useState(0);
   const [playerInfo, setPlayerInfo] = useState<{ bin: string, tracks: boolean } | null>(null);
+  const [castState, setCastState] = useState<{ url: string; qr: string; stop: () => void } | null>(null);
+  const castStopRef = React.useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (castStopRef.current) castStopRef.current();
+    };
+  }, []);
 
   useEffect(() => {
     db.watch.getEntry(anime.id).then(entry => {
@@ -153,6 +163,16 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
 
   useInput((input, key) => {
     if (playing) return;
+
+
+    if (castState) {
+      if (key.escape || key.backspace || input === "b") {
+        if (castStopRef.current) castStopRef.current();
+        castStopRef.current = null;
+        setCastState(null);
+      }
+      return;
+    }
 
     if (playlistPickerOpen) {
       if (creatingPlaylist) {
@@ -390,6 +410,29 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
       else if (focus.type === 'similar' && similar[focus.index]) {
         if (onNavigate) onNavigate(similar[focus.index] as any);
       }
+      return;
+    }
+
+
+    if (input?.toLowerCase() === "c") {
+      if (!detail) return;
+      const q = anime.title.english || anime.title.romaji || "";
+      const mEps = detail?.episodes || null;
+
+      setPlaying(true);
+      setWatchResult(null);
+      setPlayStatus(`starting cast server for ep ${selectedEp}...`);
+
+      startCastServer(q, anime.id, selectedEp, mEps).then(({ url, stop }) => {
+        castStopRef.current = stop;
+        qrcode.generate(url, { small: true }, (qr) => {
+          setCastState({ url, qr, stop });
+          setPlaying(false);
+        });
+      }).catch(err => {
+        setPlaying(false);
+        setWatchResult(`Cast Error: ${err.message}`);
+      });
       return;
     }
 
@@ -726,6 +769,25 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
         </Box>
       )}
 
+      {/* ── CAST STATE OVERLAY ── */}
+      {castState && (
+        <Box position="absolute" width="100%" height="100%" padding={2} flexDirection="column" justifyContent="center" alignItems="center" backgroundColor={theme.bg.black}>
+          <Box borderStyle="double" borderColor={theme.border.focus} padding={2} flexDirection="column" alignItems="center">
+            <Text color={theme.text.highlight} bold>CASTING</Text>
+            <Box marginTop={1} marginBottom={1} flexDirection="column" alignItems="center">
+              <Text>{castState.qr}</Text>
+            </Box>
+            <Text color="cyan">{castState.url}</Text>
+            <Box marginTop={1}>
+              <Text dimColor>scan with your phone's camera, same wifi required. closes automatically after 15 min idle.</Text>
+            </Box>
+            <Box marginTop={2}>
+              <Text dimColor><Text inverse> ESC / B </Text> STOP CASTING</Text>
+            </Box>
+          </Box>
+        </Box>
+      )}
+
       {/* ── PLAYER SPINNER ── */}
       {playing && (
         <Box position="absolute" width="100%" height="100%" padding={2} flexDirection="column" justifyContent="center" alignItems="center">
@@ -795,7 +857,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
       {/* ── FOOTER: Keybindings ── */}
       <Box paddingX={1} flexDirection="row" justifyContent="space-between">
         <Text dimColor>
-          <Text inverse> ESC </Text> BACK   <Text inverse> ↑↓←→ </Text> NAVIGATE   <Text inverse> ENTER </Text> SELECT   <Text inverse> P </Text> PLAYLIST
+          <Text inverse> ESC </Text> BACK   <Text inverse> ↑↓←→ </Text> NAVIGATE   <Text inverse> ENTER </Text> SELECT   <Text inverse> P </Text> PLAYLIST   <Text inverse> C </Text> CAST
         </Text>
         {d.nextAiringEpisode && (
           <Text color={theme.text.successBright} bold>

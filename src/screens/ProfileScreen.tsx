@@ -243,9 +243,9 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
   }
 
   return (
-    <Box flexDirection="column" padding={2} flexGrow={1} backgroundColor={theme.bg.black}>
+    <Box flexDirection="column" padding={1} flexGrow={1} backgroundColor={theme.bg.black}>
       {scrollOffset <= 0 && (
-        <Box marginBottom={2} borderStyle="single" borderColor={activeSection === "info" ? theme.border.focus : theme.border.default} padding={1} flexShrink={0}>
+        <Box marginBottom={1} borderStyle="single" borderColor={activeSection === "info" ? theme.border.focus : theme.border.default} paddingX={1} paddingY={0} flexShrink={0}>
         <Box flexDirection="column">
           <Text color={theme.text.highlight} bold>YOUR PROFILE {activeSection === "info" && !editingProfile ? <Text dimColor>(Press ENTER to edit name)</Text> : ""}</Text>
           <Box marginTop={1}>
@@ -267,7 +267,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
       )}
 
       {scrollOffset <= 1 && (
-        <Box marginBottom={2} borderStyle="single" borderColor={activeSection === "watching" ? theme.border.focus : theme.border.default} padding={1} flexShrink={0}>
+        <Box marginBottom={1} borderStyle="single" borderColor={activeSection === "watching" ? theme.border.focus : theme.border.default} paddingX={1} paddingY={0} flexShrink={0}>
         <Box flexDirection="column">
           <Text color={theme.text.highlight} bold>CONTINUE WATCHING</Text>
           <Box marginTop={1} flexDirection="row" overflow="hidden">
@@ -308,7 +308,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
       )}
 
       {scrollOffset <= 2 && (
-        <Box borderStyle="single" borderColor={activeSection === "playlists" ? theme.border.focus : theme.border.default} padding={1} flexShrink={0}>
+        <Box borderStyle="single" borderColor={activeSection === "playlists" ? theme.border.focus : theme.border.default} paddingX={1} paddingY={0} flexShrink={0}>
         <Box flexDirection="column">
           <Text color={theme.text.highlight} bold>PLAYLISTS</Text>
           <Box marginTop={1} flexDirection="row" overflow="hidden">

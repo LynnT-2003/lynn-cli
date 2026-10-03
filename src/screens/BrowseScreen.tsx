@@ -277,7 +277,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
         const visible = items.slice(start, start + visibleCount);
 
         return (
-          <Box key={row.label} flexDirection="column" marginTop={1}>
+          <Box key={row.label} flexDirection="column" marginTop={1} flexShrink={0}>
             <Text bold color={focusedRow ? theme.text.successBright : theme.text.normal}>
               {focusedRow ? "▶ " : "  "}
               {row.label}
@@ -298,16 +298,15 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
                     marginRight={CARD_GAP}
                     borderStyle={isFocused ? "round" : undefined}
                     borderColor={isFocused ? theme.border.focus : undefined}
-                    flexShrink={0}
                   >
-                    <Box width={CARD_WIDTH} height={THUMB_ROWS} overflow="hidden" flexShrink={0}>
+                    <Box width={CARD_WIDTH} height={THUMB_ROWS} overflow="hidden">
                       <Thumbnail
                         url={item.coverImage.medium}
                         cols={CARD_WIDTH}
                         rows={THUMB_ROWS}
                       />
                     </Box>
-                    <Box width={CARD_WIDTH} overflow="hidden" flexDirection="column" flexShrink={0}>
+                    <Box width={CARD_WIDTH} overflow="hidden" flexDirection="column">
                       <Text wrap="truncate-end" bold={isFocused} color={isFocused ? theme.text.successBright : theme.text.normal}>{title}</Text>
                       {row.label === "Continue Watching" && (
                         <Text dimColor>{item.description}</Text>
