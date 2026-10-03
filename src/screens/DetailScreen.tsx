@@ -214,7 +214,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
         
         setPlaying(true);
         setWatchResult(null);
-        setPlayStatus(`playing ep ${p.ep} in mpv... close the player to save progress`);
+        setPlayStatus(`playing ep ${p.ep} in video player... close the player to save progress`);
         
         playWithTracking({
           query: p.title,
@@ -343,7 +343,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
 
         setPlaying(true);
         setWatchResult(null);
-        setPlayStatus(`playing ep ${selectedEp} in mpv... close the player to save progress`);
+        setPlayStatus(`playing ep ${selectedEp} in video player... close the player to save progress`);
         
         playWithTracking({
           query: q,
