@@ -70,6 +70,8 @@ Or run `npm link` once inside the folder. After that, `lynn-cli` starts it from 
 | 🗣️ **Sub *and* dub** | Press <kbd>m</kbd> in the episode picker to switch modes. English subtitles are attached to the player automatically. |
 | 🛡️ **No `curl-impersonate`** | Requests use Chrome-like TLS fingerprints from inside Node, so there are no prebuilt C binaries or bash wrappers to install. |
 | 🚀 **Plays natively** | The stream is handed to your local player as a detached process with the correct referrer, title and subtitle track. No ads and no browser. |
+| 💾 **Progress Tracking** | MPV's IPC socket is monitored to automatically save your exact watch position and episode when you close the player. Jump right back in where you left off from your Profile screen! |
+| 📑 **Playlists & Sharing** | Create and manage custom playlists. Export them as base64 strings and share them with friends to import using `lynn-cli import <string>`. |
 
 ---
 
@@ -126,13 +128,20 @@ Selecting a relation or a recommendation opens its detail page, and you can keep
 | **Search** | *type* | Live results |
 | | <kbd>↑</kbd> <kbd>↓</kbd> · <kbd>Enter</kbd> | Choose a result or open the full grid |
 | | <kbd>Esc</kbd> | Close |
+| **Profile** | <kbd>Enter</kbd> | Edit Name / Create Playlist |
+| | <kbd>s</kbd> | Share focused playlist |
+| | <kbd>c</kbd> | Create new playlist |
 | **Detail** | <kbd>w</kbd> | Watch now |
+| | <kbd>p</kbd> | Add to / Remove from Playlist |
 | | Arrow keys · <kbd>Enter</kbd> | Expand the synopsis, jump to a relation or recommendation, or open a link |
 | | <kbd>b</kbd> / <kbd>Esc</kbd> / <kbd>Backspace</kbd> | Back |
 | **Episodes** | <kbd>↑</kbd> <kbd>↓</kbd> or <kbd>j</kbd> <kbd>k</kbd> | Choose an episode |
 | | <kbd>m</kbd> | Switch between sub and dub |
 | | <kbd>Enter</kbd> | Resolve the stream and launch the player |
 | | <kbd>Esc</kbd> | Close |
+| **Profile** | <kbd>Enter</kbd> | Edit Name / Create Playlist |
+| | <kbd>s</kbd> | Share focused playlist |
+| | <kbd>c</kbd> | Create new playlist |
 
 ---
 

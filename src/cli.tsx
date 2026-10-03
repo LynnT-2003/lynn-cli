@@ -71,5 +71,38 @@ if (rawArgs.length === 0) {
       console.log("");
     });
 
+  program
+    .command("import <payload>")
+    .description("import a shared playlist (starts with lynn:playlist:)")
+    .action(async (payload: string) => {
+      try {
+        if (!payload.startsWith("lynn:playlist:")) {
+          console.error("Invalid playlist payload.");
+          process.exit(1);
+        }
+        const b64 = payload.split(":")[2];
+        if (!b64) {
+          console.error("Missing base64 data.");
+          process.exit(1);
+        }
+        const decoded = Buffer.from(b64, "base64").toString("utf-8");
+        const data = JSON.parse(decoded);
+        
+        if (!data.name || !Array.isArray(data.animeIds)) {
+          console.error("Malformed playlist data.");
+          process.exit(1);
+        }
+        
+        const p = await db.playlist.create(data.name);
+        for (const id of data.animeIds) {
+          await db.playlist.addAnime(p.id, id);
+        }
+        
+        console.log(`Successfully imported playlist '${p.name}' with ${data.animeIds.length} items!`);
+      } catch (err) {
+        console.error("Failed to import playlist:", err);
+      }
+    });
+
   program.parseAsync(process.argv);
 }

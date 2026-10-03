@@ -10,7 +10,7 @@ import {
 import { Thumbnail } from "../components/Thumbnail.js";
 import { useLayout } from "../lib/useLayout.js";
 import { playWithTracking } from "../lib/player.js";
-import { type WatchEntry } from "../db/schema.js";
+import { type WatchEntry, type Playlist } from "../db/schema.js";
 import { db } from "../db/index.js";
 import { theme } from "../lib/theme.js";
 
@@ -92,6 +92,12 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
   const [storeResumeSec, setStoreResumeSec] = useState<number | null>(null);
   const [resumePrompt, setResumePrompt] = useState<{ ep: number, pos: number, title: string, mEps: number | null } | null>(null);
 
+  const [playlistPickerOpen, setPlaylistPickerOpen] = useState(false);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [creatingPlaylist, setCreatingPlaylist] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState("");
+  const [playlistFocusIdx, setPlaylistFocusIdx] = useState(0);
+
   useEffect(() => {
     db.watch.getEntry(anime.id).then(entry => {
       if (entry) {
@@ -141,6 +147,53 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
 
   useInput((input, key) => {
     if (playing) return;
+
+    if (playlistPickerOpen) {
+      if (creatingPlaylist) {
+        if (key.escape) setCreatingPlaylist(false);
+        else if (key.return) {
+           if (newPlaylistName.trim().length > 0) {
+             db.playlist.create(newPlaylistName.trim()).then(p => {
+               db.playlist.addAnime(p.id, anime.id).then(() => {
+                 setWatchResult(`added to new playlist '${p.name}'`);
+                 setCreatingPlaylist(false);
+                 setPlaylistPickerOpen(false);
+               });
+             });
+           }
+        }
+        else if (key.backspace || key.delete) setNewPlaylistName(prev => prev.slice(0, -1));
+        else if (input && input.length === 1) setNewPlaylistName(prev => prev + input);
+        return;
+      }
+
+      if (key.escape || input === "p" || key.backspace) {
+        setPlaylistPickerOpen(false);
+        return;
+      }
+      if (key.upArrow) setPlaylistFocusIdx(prev => Math.max(0, prev - 1));
+      else if (key.downArrow) setPlaylistFocusIdx(prev => Math.min(playlists.length, prev + 1));
+      else if (key.return || input === " ") {
+        if (playlistFocusIdx === playlists.length) {
+          setNewPlaylistName("");
+          setCreatingPlaylist(true);
+        } else {
+          const p = playlists[playlistFocusIdx]!;
+          if (p.animeIds.includes(anime.id)) {
+            db.playlist.removeAnime(p.id, anime.id).then(() => {
+              setWatchResult(`removed from '${p.name}'`);
+              setPlaylistPickerOpen(false);
+            });
+          } else {
+            db.playlist.addAnime(p.id, anime.id).then(() => {
+              setWatchResult(`added to '${p.name}'`);
+              setPlaylistPickerOpen(false);
+            });
+          }
+        }
+      }
+      return;
+    }
 
     if (resumePrompt) {
       if (key.escape || key.backspace || input === "b") {
@@ -331,25 +384,11 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
       return;
     }
 
-    if (input === "w") {
-      setFocus({ type: 'episodes', index: 0 });
-      return;
-    }
-
     if (input === "p") {
-      db.playlist.list().then(playlists => {
-        if (playlists.length === 0) {
-          db.playlist.create("Favorites").then(p => {
-            db.playlist.addAnime(p.id, anime.id).then(() => {
-              setWatchResult("added to new playlist 'Favorites'");
-            });
-          });
-        } else {
-          const p = playlists[0]!;
-          db.playlist.addAnime(p.id, anime.id).then(() => {
-            setWatchResult(`added to playlist '${p.name}'`);
-          });
-        }
+      db.playlist.list().then(ps => {
+        setPlaylists(ps);
+        setPlaylistFocusIdx(0);
+        setPlaylistPickerOpen(true);
       });
       return;
     }

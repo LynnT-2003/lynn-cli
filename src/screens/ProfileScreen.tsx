@@ -20,6 +20,8 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar }: Props) {
   
   const [creatingPlaylist, setCreatingPlaylist] = useState(false);
   const [playlistName, setPlaylistName] = useState("");
+  const [selectedPlaylistIdx, setSelectedPlaylistIdx] = useState(0);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   useEffect(() => {
     db.profile.get().then(setProfile);
@@ -80,10 +82,31 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar }: Props) {
       if (activeSection === "info") {
         setEditName(profile?.name || "");
         setEditingProfile(true);
-      } else if (activeSection === "playlists") {
-        setPlaylistName("");
-        setCreatingPlaylist(true);
       }
+      return;
+    }
+    
+    if (input === "c" && activeSection === "playlists") {
+      setPlaylistName("");
+      setCreatingPlaylist(true);
+      return;
+    }
+
+    if (input === "s" && activeSection === "playlists" && playlists[selectedPlaylistIdx]) {
+      const p = playlists[selectedPlaylistIdx];
+      const payload = Buffer.from(JSON.stringify({ name: p.name, animeIds: p.animeIds })).toString("base64");
+      const shareStr = `lynn:playlist:${payload}`;
+      
+      import('execa').then(({ execa }) => {
+        execa("pbcopy", [], { input: shareStr }).then(() => {
+          setExportMessage(`Copied to clipboard!`);
+        }).catch(() => {
+          // Fallback if pbcopy isn't available
+          const fs = require('fs');
+          fs.writeFileSync('lynn-playlist.txt', shareStr);
+          setExportMessage(`Saved to lynn-playlist.txt`);
+        });
+      });
       return;
     }
 
@@ -93,11 +116,20 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar }: Props) {
     }
 
     if (key.upArrow) {
-      if (activeSection === "playlists") setActiveSection("watching");
+      if (activeSection === "playlists") {
+        if (selectedPlaylistIdx > 0) setSelectedPlaylistIdx(prev => prev - 1);
+        else setActiveSection("watching");
+      }
       else if (activeSection === "watching") setActiveSection("info");
     } else if (key.downArrow) {
       if (activeSection === "info") setActiveSection("watching");
-      else if (activeSection === "watching") setActiveSection("playlists");
+      else if (activeSection === "watching") {
+        setActiveSection("playlists");
+        setSelectedPlaylistIdx(0);
+      }
+      else if (activeSection === "playlists") {
+        if (selectedPlaylistIdx < playlists.length - 1) setSelectedPlaylistIdx(prev => prev + 1);
+      }
     }
   });
 
@@ -144,15 +176,25 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar }: Props) {
 
       <Box borderStyle="single" borderColor={activeSection === "playlists" ? theme.border.focus : theme.border.default} padding={1}>
         <Box flexDirection="column">
-          <Text color={theme.text.highlight} bold>PLAYLISTS {activeSection === "playlists" && !creatingPlaylist ? <Text dimColor>(Press ENTER to create)</Text> : ""}</Text>
+          <Text color={theme.text.highlight} bold>PLAYLISTS</Text>
           <Box marginTop={1} flexDirection="column">
             {playlists.length === 0 && !creatingPlaylist ? <Text dimColor>No playlists created.</Text> : null}
-            {playlists.map(p => (
-              <Text key={p.id}>
-                <Text color={theme.text.accent}>› </Text>
-                {p.name} <Text dimColor>({p.animeIds.length} items)</Text>
-              </Text>
-            ))}
+            {playlists.map((p, i) => {
+              const isFocused = activeSection === "playlists" && selectedPlaylistIdx === i;
+              return (
+                <Text key={p.id} color={isFocused ? "white" : "gray"} backgroundColor={isFocused ? "#444" : undefined}>
+                  <Text color={isFocused ? theme.text.accent : "gray"}>› </Text>
+                  {p.name} <Text dimColor>({p.animeIds.length} items)</Text>
+                </Text>
+              );
+            })}
+            
+            {exportMessage && activeSection === "playlists" && (
+              <Box marginTop={1}>
+                <Text color="greenBright">{exportMessage}</Text>
+              </Box>
+            )}
+
             {creatingPlaylist && (
               <Box marginTop={1} flexDirection="column">
                 <Text color={theme.text.accent}>New Playlist Name:</Text>
@@ -165,7 +207,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar }: Props) {
       </Box>
       
       <Box marginTop={1}>
-        <Text dimColor>↑↓ select section · ← sidebar</Text>
+        <Text dimColor>↑↓ select · ← sidebar {activeSection === "playlists" ? "· c create · s share" : ""}</Text>
       </Box>
     </Box>
   );
