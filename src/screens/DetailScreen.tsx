@@ -385,7 +385,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
       return;
     }
 
-    if (input === "p") {
+    if (input?.toLowerCase() === "p") {
       db.playlist.list().then(ps => {
         setPlaylists(ps);
         setPlaylistFocusIdx(0);

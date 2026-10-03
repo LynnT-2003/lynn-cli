@@ -86,13 +86,13 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar }: Props) {
       return;
     }
     
-    if (input === "c" && activeSection === "playlists") {
+    if (input?.toLowerCase() === "c" && activeSection === "playlists") {
       setPlaylistName("");
       setCreatingPlaylist(true);
       return;
     }
 
-    if (input === "s" && activeSection === "playlists" && playlists[selectedPlaylistIdx]) {
+    if (input?.toLowerCase() === "s" && activeSection === "playlists" && playlists[selectedPlaylistIdx]) {
       const p = playlists[selectedPlaylistIdx];
       const payload = Buffer.from(JSON.stringify({ name: p.name, animeIds: p.animeIds })).toString("base64");
       const shareStr = `lynn:playlist:${payload}`;
