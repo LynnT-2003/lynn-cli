@@ -227,7 +227,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
 
       {/* SPOTLIGHT HERO BANNER */}
       {heroAnime && (
-        <Box flexDirection="row" height={15} flexShrink={0} marginBottom={1} overflow="hidden" borderStyle="round" borderColor={isHeroFocused ? theme.border.hero : theme.border.default}>
+        <Box flexDirection="row" height={15} marginBottom={1} overflow="hidden" borderStyle="round" borderColor={isHeroFocused ? theme.border.hero : theme.border.default}>
           {/* LEFT: INFO */}
           <Box flexDirection="column" width={leftWidth} paddingRight={2} justifyContent="center" paddingLeft={1}>
             <Text color={theme.text.highlightBright} bold>#{spotlightIndex + 1} Spotlight</Text>
@@ -277,7 +277,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
         const visible = items.slice(start, start + visibleCount);
 
         return (
-          <Box key={row.label} flexDirection="column" marginTop={1} flexShrink={0}>
+          <Box key={row.label} flexDirection="column" marginTop={1}>
             <Text bold color={focusedRow ? theme.text.successBright : theme.text.normal}>
               {focusedRow ? "▶ " : "  "}
               {row.label}
