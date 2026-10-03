@@ -740,10 +740,54 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
         </Box>
       )}
 
+      {/* ── PLAYLIST PICKER OVERLAY ── */}
+      {playlistPickerOpen && (
+        <Box
+          position="absolute"
+          width="100%"
+          height="100%"
+          justifyContent="center"
+          alignItems="center"
+        >
+          <Box flexDirection="column" borderStyle="double" borderColor={theme.border.focus} padding={2} backgroundColor={theme.bg.black}>
+            <Text color={theme.text.highlight} bold>Add to Playlist</Text>
+            
+            <Box marginTop={1} flexDirection="column">
+              {playlists.map((p, i) => {
+                const isFocused = playlistFocusIdx === i;
+                const hasAnime = p.animeIds.includes(anime.id);
+                return (
+                  <Text key={p.id} color={isFocused ? "white" : "gray"} backgroundColor={isFocused ? "#444" : undefined}>
+                    {hasAnime ? "[x]" : "[ ]"} {p.name}
+                  </Text>
+                );
+              })}
+              
+              <Box marginTop={1}>
+                <Text color={playlistFocusIdx === playlists.length ? "white" : "gray"} backgroundColor={playlistFocusIdx === playlists.length ? "#444" : undefined}>
+                  [+ Create New Playlist]
+                </Text>
+              </Box>
+            </Box>
+            
+            {creatingPlaylist && (
+              <Box marginTop={1} flexDirection="column" borderStyle="single" borderColor="cyan" padding={1}>
+                <Text color="cyan">Playlist Name:</Text>
+                <Text>{newPlaylistName}<Text inverse> </Text></Text>
+              </Box>
+            )}
+            
+            <Box marginTop={2}>
+              <Text dimColor>↑↓ select · ENTER toggle/create · ESC close</Text>
+            </Box>
+          </Box>
+        </Box>
+      )}
+
       {/* ── FOOTER: Keybindings ── */}
       <Box paddingX={1} flexDirection="row" justifyContent="space-between">
         <Text dimColor>
-          <Text inverse> ESC </Text> BACK   <Text inverse> ↑↓←→ </Text> NAVIGATE   <Text inverse> ENTER </Text> SELECT
+          <Text inverse> ESC </Text> BACK   <Text inverse> ↑↓←→ </Text> NAVIGATE   <Text inverse> ENTER </Text> SELECT   <Text inverse> P </Text> PLAYLIST
         </Text>
         {d.nextAiringEpisode && (
           <Text color={theme.text.successBright} bold>
