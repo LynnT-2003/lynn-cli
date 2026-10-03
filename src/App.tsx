@@ -5,6 +5,9 @@ import { DetailScreen } from "./screens/DetailScreen.js";
 import { SearchOverlay } from "./screens/SearchOverlay.js";
 import { SearchGridScreen } from "./screens/SearchGridScreen.js";
 import { SplashScreen } from "./screens/SplashScreen.js";
+import { OnboardingScreen } from "./screens/OnboardingScreen.js";
+import { ProfileScreen } from "./screens/ProfileScreen.js";
+import { db } from "./db/index.js";
 import { LayoutProvider, useLayout } from "./lib/useLayout.js";
 import { useNavigation } from "./lib/navigation.js";
 import { Sidebar } from "./components/Sidebar.js";
@@ -62,7 +65,10 @@ function MainApp() {
           />
         )}
         {currentScreen.kind === "profile" && (
-          <Box padding={2}><Text>profile - coming soon</Text></Box>
+          <ProfileScreen 
+            isFocused={!sidebarFocused}
+            onFocusSidebar={() => setSidebarFocused(true)}
+          />
         )}
         {currentScreen.kind === "search" && (
           <Box padding={2}><Text>search - coming soon</Text></Box>
@@ -75,11 +81,16 @@ function MainApp() {
 export function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [ready, setReady] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
     process.stdout.write("\x1B[?1049h");
     process.stdout.write("\x1B[?25l");
-    setReady(true);
+    
+    db.profile.get().then(p => {
+      setNeedsOnboarding(!p.onboarded);
+      setReady(true);
+    });
 
     return () => {
       process.stdout.write("\x1B[?25h");
@@ -93,6 +104,16 @@ export function App() {
 
   if (showSplash) {
     return <SplashScreen onContinue={() => setShowSplash(false)} />;
+  }
+
+  if (needsOnboarding) {
+    return (
+      <OnboardingScreen onComplete={(name, genres) => {
+        db.profile.completeOnboarding(name, genres, []).then(() => {
+          setNeedsOnboarding(false);
+        });
+      }} />
+    );
   }
 
   return (

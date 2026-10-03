@@ -8,7 +8,7 @@ import {
 } from "../lib/anilist.js";
 import { Thumbnail } from "../components/Thumbnail.js";
 import { useLayout } from "../lib/useLayout.js";
-import { getContinueWatching } from "../lib/store.js";
+import { db } from "../db/index.js";
 import { theme } from "../lib/theme.js";
 
 // anime covers are roughly 2:3 (w:h). raw pixel height is rows*2 (half-block
@@ -44,9 +44,8 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
   const [colByRow, setColByRow] = useState<number[]>([]);
 
   useEffect(() => {
-    fetchCategories()
-      .then((data) => {
-        const cw = getContinueWatching();
+    Promise.all([fetchCategories(), db.watch.continueWatching()])
+      .then(([data, cw]) => {
         let initialRows = data;
         if (cw.length > 0) {
           initialRows = [{
@@ -56,7 +55,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
               const s = Math.floor(c.positionSeconds % 60).toString().padStart(2, '0');
               const subtext = c.positionSeconds > 0 ? `ep ${c.resumeEpisode} · ${m}:${s}` : `ep ${c.resumeEpisode}`;
               return {
-                id: c.id,
+                id: c.anilistId,
                 title: { english: c.title, romaji: c.title },
                 episodes: c.totalEpisodes,
                 status: null,
@@ -79,7 +78,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
   useEffect(() => {
     if (!rows) return;
     if (isFocused) {
-      const cw = getContinueWatching();
+      db.watch.continueWatching().then(cw => {
       let cwRow: CategoryRow | null = null;
       if (cw.length > 0) {
         cwRow = {
@@ -89,7 +88,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
              const s = Math.floor(c.positionSeconds % 60).toString().padStart(2, '0');
              const subtext = c.positionSeconds > 0 ? `ep ${c.resumeEpisode} · ${m}:${s}` : `ep ${c.resumeEpisode}`;
              return {
-               id: c.id,
+               id: c.anilistId,
                title: { english: c.title, romaji: c.title },
                episodes: c.totalEpisodes,
                status: null,
@@ -121,6 +120,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
           return next;
         }
         return prev;
+      });
       });
     }
   }, [isFocused]);
