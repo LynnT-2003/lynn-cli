@@ -13,7 +13,7 @@ import { playWithTracking, getPlayerInfo } from "../lib/player.js";
 import { type WatchEntry, type Playlist } from "../db/schema.js";
 import { db } from "../db/index.js";
 import { theme } from "../lib/theme.js";
-import { startCastServer } from "../lib/castServer.js";
+import { startCastServer, type CastEvent } from "../lib/castServer.js";
 import qrcode from "qrcode-terminal";
 
 // ── layout constants ──────────────────────────────────────────
@@ -75,6 +75,16 @@ type FocusState = {
   index: number;
 };
 
+function fmtTime(sec: number) {
+  const m = Math.floor(sec / 60);
+  const ss = Math.floor(sec % 60).toString().padStart(2, "0");
+  return `${m}:${ss}`;
+}
+
+function mEpsLabel(total: number | null | undefined) {
+  return total ? ` of ${total}` : "";
+}
+
 export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFocusSidebar }: Props) {
   const { contentColumns: columns, rows: termRows } = useLayout();
   const [detail, setDetail] = useState<AnilistAnimeDetail | null>(null);
@@ -102,6 +112,56 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
   const [playerInfo, setPlayerInfo] = useState<{ bin: string, tracks: boolean } | null>(null);
   const [castState, setCastState] = useState<{ url: string; qr: string; stop: () => void } | null>(null);
   const castStopRef = React.useRef<(() => void) | null>(null);
+  // live state reported by the phone; null until it opens the page
+  const [castInfo, setCastInfo] = useState<{ device: string; ep: number; pos: number; dur: number; paused: boolean; at: number } | null>(null);
+  const [castShowQr, setCastShowQr] = useState(true);
+  const [, setCastTick] = useState(0);
+
+  // re-render once a second while the phone is playing so the progress bar moves between pings
+  useEffect(() => {
+    if (!castInfo || castInfo.paused) return;
+    const t = setInterval(() => setCastTick(n => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [castInfo?.paused, castInfo !== null]);
+
+  const stopCasting = (message?: string) => {
+    if (castStopRef.current) castStopRef.current();
+    castStopRef.current = null;
+    setCastState(null);
+    setCastInfo(null);
+    setCastShowQr(true);
+    if (message) setWatchResult(message);
+  };
+
+  const handleCastEvent = (e: CastEvent) => {
+    switch (e.type) {
+      case "connected":
+        setCastInfo(prev => ({ device: e.device, ep: prev?.ep ?? selectedEp, pos: 0, dur: 0, paused: true, at: Date.now() }));
+        setCastShowQr(false);
+        break;
+      case "episode":
+        setCastInfo(prev => prev && { ...prev, ep: e.ep, pos: 0, dur: 0, paused: true, at: Date.now() });
+        setSelectedEp(e.ep);
+        break;
+      case "progress":
+        setCastInfo(prev => prev && { ...prev, ep: e.ep, pos: e.pos, dur: e.dur, paused: e.paused, at: Date.now() });
+        setStoreResumeEp(e.ep);
+        setStoreResumeSec(e.pos);
+        break;
+      case "complete":
+        db.watch.getEntry(anime.id).then(entry => { entryRef.current = entry; });
+        setStoreResumeEp(e.ep + 1);
+        setStoreResumeSec(null);
+        setWatchResult(`ep ${e.ep} completed on phone`);
+        break;
+      case "stopped":
+        if (e.reason === "idle") {
+          castStopRef.current = null;
+          stopCasting("cast ended after 15 min idle");
+        }
+        break;
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -167,9 +227,10 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
 
     if (castState) {
       if (key.escape || key.backspace || input === "b") {
-        if (castStopRef.current) castStopRef.current();
-        castStopRef.current = null;
-        setCastState(null);
+        const info = castInfo;
+        stopCasting(info && info.pos > 0 ? `saved: ep ${info.ep} at ${fmtTime(info.pos)}` : "casting stopped");
+      } else if (input?.toLowerCase() === "q" && castInfo) {
+        setCastShowQr(v => !v);
       }
       return;
     }
@@ -423,7 +484,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
       setWatchResult(null);
       setPlayStatus(`starting cast server for ep ${selectedEp}...`);
 
-      startCastServer(q, anime.id, selectedEp, mEps).then(({ url, stop }) => {
+      startCastServer(q, anime.id, selectedEp, mEps, handleCastEvent).then(({ url, stop }) => {
         castStopRef.current = stop;
         qrcode.generate(url, { small: true }, (qr) => {
           setCastState({ url, qr, stop });
@@ -769,24 +830,58 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
         </Box>
       )}
 
-      {/* ── CAST STATE OVERLAY ── */}
-      {castState && (
+      {/* ── CAST: QR (until the phone connects, or Q to show again) ── */}
+      {castState && (castShowQr || !castInfo) && (
         <Box position="absolute" width="100%" height="100%" padding={2} flexDirection="column" justifyContent="center" alignItems="center" backgroundColor={theme.bg.black}>
           <Box borderStyle="double" borderColor={theme.border.focus} padding={2} flexDirection="column" alignItems="center">
-            <Text color={theme.text.highlight} bold>CASTING</Text>
+            <Text color={theme.text.highlight} bold>CAST TO PHONE</Text>
             <Box marginTop={1} marginBottom={1} flexDirection="column" alignItems="center">
               <Text>{castState.qr}</Text>
             </Box>
             <Text color="cyan">{castState.url}</Text>
             <Box marginTop={1}>
-              <Text dimColor>scan with your phone's camera, same wifi required. closes automatically after 15 min idle.</Text>
+              {castInfo
+                ? <Text color="green">● connected: {castInfo.device}</Text>
+                : <Text color={theme.text.highlight}><Spinner type="dots" /> waiting for phone… scan with your camera (same wifi or hotspot)</Text>}
             </Box>
             <Box marginTop={2}>
-              <Text dimColor><Text inverse> ESC / B </Text> STOP CASTING</Text>
+              <Text dimColor>
+                {castInfo && <><Text inverse> Q </Text> HIDE QR   </>}
+                <Text inverse> ESC </Text> STOP CASTING
+              </Text>
             </Box>
           </Box>
         </Box>
       )}
+
+      {/* ── CAST: NOW PLAYING ── */}
+      {castState && castInfo && !castShowQr && (() => {
+        const live = castInfo.paused ? castInfo.pos : castInfo.pos + (Date.now() - castInfo.at) / 1000;
+        const pos = castInfo.dur ? Math.min(live, castInfo.dur) : live;
+        const barWidth = 36;
+        const filled = castInfo.dur ? Math.round((pos / castInfo.dur) * barWidth) : 0;
+        const title = anime.title.english || anime.title.romaji || "";
+        return (
+          <Box position="absolute" width="100%" height="100%" padding={2} flexDirection="column" justifyContent="center" alignItems="center">
+            <Box borderStyle="round" borderColor={theme.border.hero} paddingX={3} paddingY={1} backgroundColor={theme.bg.black} flexDirection="column">
+              <Text color={theme.text.highlight} bold>📱 CASTING TO {castInfo.device}</Text>
+              <Box marginTop={1}><Text bold>{title}</Text></Box>
+              <Box justifyContent="space-between">
+                <Text>Episode {castInfo.ep}{mEpsLabel(detail?.episodes)}</Text>
+                <Text color={castInfo.paused ? "yellow" : "green"}>{castInfo.dur === 0 ? "◌ loading" : castInfo.paused ? "❚❚ paused" : "▶ playing"}</Text>
+              </Box>
+              <Box marginTop={1}>
+                <Text color={theme.text.highlight}>{"━".repeat(filled)}</Text>
+                <Text dimColor>{"━".repeat(barWidth - filled)}</Text>
+                <Text>  {fmtTime(pos)} / {castInfo.dur ? fmtTime(castInfo.dur) : "--:--"}</Text>
+              </Box>
+              <Box marginTop={1}>
+                <Text dimColor>progress saves automatically · <Text inverse> Q </Text> QR · <Text inverse> ESC </Text> stop casting</Text>
+              </Box>
+            </Box>
+          </Box>
+        );
+      })()}
 
       {/* ── PLAYER SPINNER ── */}
       {playing && (

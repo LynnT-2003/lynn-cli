@@ -29,11 +29,20 @@ function getLanIp() {
   );
 }
 
+// what the phone is doing, pushed to the terminal so it can show a now-playing panel
+export type CastEvent =
+  | { type: "connected"; device: string }
+  | { type: "episode"; ep: number }
+  | { type: "progress"; ep: number; pos: number; dur: number; paused: boolean }
+  | { type: "complete"; ep: number }
+  | { type: "stopped"; reason: "idle" | "manual" };
+
 export async function startCastServer(
   hianimeId: string, // used as search query for findHianimeAnime
   anilistId: number,
   startEpisode: number,
-  totalEpisodes: number | null
+  totalEpisodes: number | null,
+  onEvent: (e: CastEvent) => void = () => {}
 ): Promise<{ url: string; stop: () => void }> {
   const lanIp = getLanIp();
   if (!lanIp) throw new Error("No LAN IP found");
@@ -63,16 +72,23 @@ export async function startCastServer(
   let server: http.Server;
   let idleInterval: NodeJS.Timeout;
 
-  const stop = () => {
+  let stopped = false;
+  const shutdown = (reason: "idle" | "manual") => {
+    if (stopped) return;
+    stopped = true;
     clearInterval(idleInterval);
     server.close();
+    onEvent({ type: "stopped", reason });
   };
+  const stop = () => shutdown("manual");
 
   idleInterval = setInterval(() => {
     if (Date.now() - lastActive > 15 * 60 * 1000) {
-      stop();
+      shutdown("idle");
     }
   }, 60 * 1000);
+
+  let connectedDevice: string | null = null;
 
   const parseBody = (req: http.IncomingMessage): Promise<any> => {
     return new Promise((resolve, reject) => {
@@ -155,6 +171,11 @@ export async function startCastServer(
 
       if (req.method === "GET" && pathname === "/") {
         lastActive = Date.now();
+        const device = (req.socket.remoteAddress || "phone").replace(/^::ffff:/, "");
+        if (connectedDevice !== device) {
+          connectedDevice = device;
+          onEvent({ type: "connected", device });
+        }
         const html = `
 <!DOCTYPE html>
 <html>
@@ -262,12 +283,12 @@ export async function startCastServer(
 
     // Auto-advance
     video.addEventListener("ended", () => {
+      fetch("/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ episode: currentEp })
+      }).catch(() => {});
       if (isLastEp) {
-        fetch("/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ episode: currentEp })
-        });
         message.textContent = "Season Complete";
         message.style.display = "flex";
       } else {
@@ -291,7 +312,7 @@ export async function startCastServer(
       fetch("/progress", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ episode: currentEp, pos: video.currentTime, dur: video.duration })
+        body: JSON.stringify({ episode: currentEp, pos: video.currentTime, dur: video.duration, paused: video.paused })
       }).catch(() => {});
     }
     function reportProgress() {
@@ -299,7 +320,8 @@ export async function startCastServer(
       sendProgress();
     }
 
-    setInterval(reportProgress, 10000);
+    setInterval(reportProgress, 5000);
+    video.addEventListener("play", sendProgress);
     // Pause fires when the user locks their phone — save immediately, not waiting for interval.
     video.addEventListener("pause", () => {
       if (video.duration && video.currentTime < video.duration) {
@@ -315,7 +337,8 @@ export async function startCastServer(
       navigator.sendBeacon("/progress", JSON.stringify({
         episode: currentEp,
         pos: video.currentTime,
-        dur: video.duration
+        dur: video.duration,
+        paused: true
       }));
     }
     window.addEventListener("visibilitychange", () => {
@@ -354,6 +377,7 @@ export async function startCastServer(
             streamInfo = await hianimeGetStreamUrl(targetEp.dataId, "sub");
             streamCache.set(ep, streamInfo);
           }
+          onEvent({ type: "episode", ep });
           const playlistUrl = `/playlist.m3u8?ep=${ep}`;
           const subUrl = streamInfo.subtitleUrl ? `/subs.vtt?ep=${ep}` : null;
           
@@ -387,6 +411,7 @@ export async function startCastServer(
             { anilistId, title: anime.title, cover, totalEpisodes, playerQuery: hianimeId },
             body.episode, body.pos, body.dur
           );
+          onEvent({ type: "progress", ep: body.episode, pos: body.pos, dur: body.dur, paused: body.paused === true });
         }
         res.writeHead(200); res.end("OK");
         return;
@@ -397,6 +422,7 @@ export async function startCastServer(
         const body = await parseBody(req);
         if (typeof body.episode === "number") {
           await watchRepo.markEpisodeCompleted(anilistId, body.episode);
+          onEvent({ type: "complete", ep: body.episode });
         }
         res.writeHead(200); res.end("OK");
         return;
