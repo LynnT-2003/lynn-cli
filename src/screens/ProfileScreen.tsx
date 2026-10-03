@@ -8,9 +8,10 @@ type Props = {
   isFocused?: boolean;
   onFocusSidebar?: () => void;
   onOpenPlaylist?: (playlist: Playlist) => void;
+  onOpenAnime?: (anime: any) => void;
 };
 
-export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist }: Props) {
+export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist, onOpenAnime }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [watching, setWatching] = useState<WatchEntry[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -23,6 +24,9 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
   const [playlistName, setPlaylistName] = useState("");
   const [selectedPlaylistIdx, setSelectedPlaylistIdx] = useState(0);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  
+  const [selectedWatchingIdx, setSelectedWatchingIdx] = useState(0);
+  const [openingAnime, setOpeningAnime] = useState(false);
 
   useEffect(() => {
     db.profile.get().then(setProfile);
@@ -85,6 +89,16 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
         setEditingProfile(true);
       } else if (activeSection === "playlists" && playlists[selectedPlaylistIdx]) {
         if (onOpenPlaylist) onOpenPlaylist(playlists[selectedPlaylistIdx]);
+      } else if (activeSection === "watching" && watching[selectedWatchingIdx]) {
+        if (onOpenAnime && !openingAnime) {
+          setOpeningAnime(true);
+          import("../lib/anilist.js").then(({ fetchAnimeDetail }) => {
+            fetchAnimeDetail(watching[selectedWatchingIdx].anilistId).then(anime => {
+              setOpeningAnime(false);
+              onOpenAnime(anime);
+            }).catch(() => setOpeningAnime(false));
+          });
+        }
       }
       return;
     }
@@ -121,14 +135,26 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
     if (key.upArrow) {
       if (activeSection === "playlists") {
         if (selectedPlaylistIdx > 0) setSelectedPlaylistIdx(prev => prev - 1);
-        else setActiveSection("watching");
+        else {
+          setActiveSection("watching");
+          setSelectedWatchingIdx(Math.max(0, Math.min(watching.length, 5) - 1));
+        }
       }
-      else if (activeSection === "watching") setActiveSection("info");
-    } else if (key.downArrow) {
-      if (activeSection === "info") setActiveSection("watching");
       else if (activeSection === "watching") {
-        setActiveSection("playlists");
-        setSelectedPlaylistIdx(0);
+        if (selectedWatchingIdx > 0) setSelectedWatchingIdx(prev => prev - 1);
+        else setActiveSection("info");
+      }
+    } else if (key.downArrow) {
+      if (activeSection === "info") {
+        setActiveSection("watching");
+        setSelectedWatchingIdx(0);
+      }
+      else if (activeSection === "watching") {
+        if (selectedWatchingIdx < Math.min(watching.length, 5) - 1) setSelectedWatchingIdx(prev => prev + 1);
+        else {
+          setActiveSection("playlists");
+          setSelectedPlaylistIdx(0);
+        }
       }
       else if (activeSection === "playlists") {
         if (selectedPlaylistIdx < playlists.length - 1) setSelectedPlaylistIdx(prev => prev + 1);
@@ -166,12 +192,16 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
           <Text color={theme.text.highlight} bold>CONTINUE WATCHING</Text>
           <Box marginTop={1} flexDirection="column">
             {watching.length === 0 ? <Text dimColor>Nothing yet.</Text> : null}
-            {watching.slice(0, 5).map(w => (
-              <Text key={w.anilistId}>
-                <Text color={theme.text.accent}>› </Text>
-                {w.title} - <Text dimColor>Ep {w.resumeEpisode ?? (w.lastEpisode + 1)}</Text>
-              </Text>
-            ))}
+            {watching.slice(0, 5).map((w, i) => {
+              const isFocused = activeSection === "watching" && selectedWatchingIdx === i;
+              return (
+                <Text key={w.anilistId} color={isFocused ? "white" : "gray"} backgroundColor={isFocused ? "#444" : undefined}>
+                  <Text color={isFocused ? theme.text.accent : "gray"}>› </Text>
+                  {w.title} - <Text dimColor>Ep {w.resumeEpisode ?? (w.lastEpisode + 1)}</Text>
+                  {openingAnime && isFocused && <Text color="yellow"> (Loading...)</Text>}
+                </Text>
+              );
+            })}
             {watching.length > 5 && <Text dimColor>+ {watching.length - 5} more</Text>}
           </Box>
         </Box>

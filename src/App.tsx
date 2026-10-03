@@ -71,6 +71,7 @@ function MainApp() {
             isFocused={!sidebarFocused}
             onFocusSidebar={() => setSidebarFocused(true)}
             onOpenPlaylist={(playlist) => push({ kind: "playlist", playlist })}
+            onOpenAnime={(anime) => push({ kind: "detail", anime })}
           />
         )}
         {currentScreen.kind === "playlist" && (
