@@ -33,7 +33,7 @@ export class PlayerError extends Error {
 }
 
 async function resolvePlayerBin(): Promise<string> {
-  const players = ["iina", "mpv", "vlc"];
+  const players = ["mpv", "iina", "vlc"];
   for (const p of players) {
     try {
       await execa("sh", ["-c", `command -v ${p}`]);
