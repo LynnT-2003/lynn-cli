@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import { Thumbnail } from "../components/Thumbnail.js";
+import { Card } from "../components/Card.js";
 import { db } from "../db/index.js";
 import { theme } from "../lib/theme.js";
 import type { Profile, WatchEntry, Playlist } from "../db/schema.js";
@@ -244,48 +245,39 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
           <Text color={theme.text.highlight} bold>CONTINUE WATCHING</Text>
           <Box marginTop={1} flexDirection="row" overflow="hidden">
             {watching.length === 0 ? <Text dimColor>Nothing yet.</Text> : null}
-            {watching.slice(0, 3).map((w, i) => {
-              const isFocused = activeSection === "watching" && selectedWatchingIdx === i;
-              
-              const m = Math.floor(w.positionSeconds / 60);
-              const s = Math.floor(w.positionSeconds % 60).toString().padStart(2, '0');
-              const dM = Math.floor(w.durationSeconds / 60);
-              const dS = Math.floor(w.durationSeconds % 60).toString().padStart(2, '0');
-              
-              const pct = w.durationSeconds ? Math.min(100, Math.floor((w.positionSeconds / w.durationSeconds) * 100)) : 0;
-              const barLen = 14;
-              const filled = Math.floor((pct / 100) * barLen);
-              const barStr = "█".repeat(filled) + "▒".repeat(barLen - filled);
-              
-              return (
-                <Box 
-                  key={w.anilistId} 
-                  flexDirection="column" 
-                  marginRight={2}
-                  borderStyle="single"
-                  borderColor={isFocused ? theme.border.focus : theme.border.default}
-                  paddingX={1}
-                  paddingY={0}
-                  width={24}
-                  height={18}
-                >
-                  <Box alignSelf="center">
-                    <Thumbnail url={w.cover || null} cols={20} rows={10} />
-                  </Box>
-                  <Box height={2} overflow="hidden" marginTop={1}>
-                    <Text color={isFocused ? "white" : "gray"} bold>{w.title}</Text>
-                  </Box>
-                  <Box flexDirection="row" justifyContent="space-between">
-                    <Text color={theme.text.accent}>Ep {w.resumeEpisode ?? (w.lastEpisode + 1)}</Text>
-                    <Text dimColor>{m}:{s}</Text>
-                  </Box>
-                  <Box>
-                    <Text color={isFocused ? "cyan" : "gray"}>{"█".repeat(Math.floor((pct / 100) * 20)) + "▒".repeat(20 - Math.floor((pct / 100) * 20))}</Text>
-                  </Box>
-                  {openingAnime && isFocused && <Box><Text color="yellow">Loading...</Text></Box>}
-                </Box>
-              );
-            })}
+            
+            {activeSection !== "watching" ? (
+              <Box flexDirection="column">
+                <Text dimColor>{watching.length} items (Select to expand)</Text>
+              </Box>
+            ) : (
+              watching.slice(0, 3).map((w, i) => {
+                const isFocused = activeSection === "watching" && selectedWatchingIdx === i;
+                
+                const m = Math.floor(w.positionSeconds / 60);
+                const s = Math.floor(w.positionSeconds % 60).toString().padStart(2, '0');
+                const pct = w.durationSeconds ? Math.min(100, Math.floor((w.positionSeconds / w.durationSeconds) * 100)) : 0;
+                
+                return (
+                  <Card key={w.anilistId} isFocused={isFocused} width={24} height={17}>
+                    <Box alignSelf="center">
+                      <Thumbnail url={w.cover || null} cols={20} rows={10} />
+                    </Box>
+                    <Box height={2} overflow="hidden" marginTop={1}>
+                      <Text color={isFocused ? "white" : "gray"} bold>{w.title}</Text>
+                    </Box>
+                    <Box flexDirection="row" justifyContent="space-between">
+                      <Text color={theme.text.accent}>Ep {w.resumeEpisode ?? (w.lastEpisode + 1)}</Text>
+                      <Text dimColor>{m}:{s}</Text>
+                    </Box>
+                    <Box>
+                      <Text color={isFocused ? "cyan" : "gray"}>{"█".repeat(Math.floor((pct / 100) * 20)) + "▒".repeat(20 - Math.floor((pct / 100) * 20))}</Text>
+                    </Box>
+                    {openingAnime && isFocused && <Box><Text color="yellow">Loading...</Text></Box>}
+                  </Card>
+                );
+              })
+            )}
           </Box>
         </Box>
       </Box>
@@ -296,51 +288,47 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
           <Box marginTop={1} flexDirection="row" overflow="hidden">
             {playlists.length === 0 && !creatingPlaylist ? <Text dimColor>No playlists created.</Text> : null}
             
-            {playlists.slice(0, 3).map((p, i) => {
-              const isFocused = activeSection === "playlists" && selectedPlaylistIdx === i;
-              const covers = p.animeIds.map(id => playlistCovers[id]).filter(Boolean);
-              
-              return (
-                <Box 
-                  key={p.id} 
-                  flexDirection="column" 
-                  marginRight={2}
-                  borderStyle="single"
-                  borderColor={isFocused ? theme.border.focus : theme.border.default}
-                  paddingX={1}
-                  paddingY={0}
-                  width={24}
-                  height={16}
-                >
-                  <Box alignSelf="center" width={20} height={10} flexDirection="column">
-                    {covers.length === 0 ? (
-                       <Box flexGrow={1} borderStyle="single" borderColor={theme.border.default} justifyContent="center" alignItems="center">
-                         <Text dimColor>EMPTY</Text>
-                       </Box>
-                    ) : covers.length < 4 ? (
-                       <Thumbnail url={covers[0] || null} cols={20} rows={10} />
-                    ) : (
-                       <Box flexDirection="column">
-                         <Box flexDirection="row">
-                           <Thumbnail url={covers[0] || null} cols={10} rows={5} />
-                           <Thumbnail url={covers[1] || null} cols={10} rows={5} />
+            {activeSection !== "playlists" ? (
+              <Box flexDirection="column">
+                <Text dimColor>{playlists.length} items (Select to expand)</Text>
+              </Box>
+            ) : (
+              playlists.slice(0, 3).map((p, i) => {
+                const isFocused = activeSection === "playlists" && selectedPlaylistIdx === i;
+                const covers = p.animeIds.map(id => playlistCovers[id]).filter(Boolean);
+                
+                return (
+                  <Card key={p.id} isFocused={isFocused} width={24} height={16}>
+                    <Box alignSelf="center" width={20} height={10} flexDirection="column">
+                      {covers.length === 0 ? (
+                         <Box flexGrow={1} borderStyle="single" borderColor={theme.border.default} justifyContent="center" alignItems="center">
+                           <Text dimColor>EMPTY</Text>
                          </Box>
-                         <Box flexDirection="row">
-                           <Thumbnail url={covers[2] || null} cols={10} rows={5} />
-                           <Thumbnail url={covers[3] || null} cols={10} rows={5} />
+                      ) : covers.length < 4 ? (
+                         <Thumbnail url={covers[0] || null} cols={20} rows={10} />
+                      ) : (
+                         <Box flexDirection="column">
+                           <Box flexDirection="row">
+                             <Thumbnail url={covers[0] || null} cols={10} rows={5} />
+                             <Thumbnail url={covers[1] || null} cols={10} rows={5} />
+                           </Box>
+                           <Box flexDirection="row">
+                             <Thumbnail url={covers[2] || null} cols={10} rows={5} />
+                             <Thumbnail url={covers[3] || null} cols={10} rows={5} />
+                           </Box>
                          </Box>
-                       </Box>
-                    )}
-                  </Box>
-                  <Box height={2} overflow="hidden" marginTop={1}>
-                    <Text color={isFocused ? "white" : "gray"} bold>{p.name}</Text>
-                  </Box>
-                  <Box>
-                    <Text dimColor>{p.animeIds.length} items</Text>
-                  </Box>
-                </Box>
-              );
-            })}
+                      )}
+                    </Box>
+                    <Box height={2} overflow="hidden" marginTop={1}>
+                      <Text color={isFocused ? "white" : "gray"} bold>{p.name}</Text>
+                    </Box>
+                    <Box>
+                      <Text dimColor>{p.animeIds.length} items</Text>
+                    </Box>
+                  </Card>
+                );
+              })
+            )}
 
           </Box>
 
