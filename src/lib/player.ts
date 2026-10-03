@@ -17,6 +17,7 @@ export type PlayTrackingOptions = {
   query: string;
   episode: number;
   startAt?: number;
+  onLog?: (msg: string) => void;
 };
 
 export type PlayTrackingResult = {
@@ -32,23 +33,28 @@ export class PlayerError extends Error {
   }
 }
 
-async function resolvePlayerBin(): Promise<string> {
+async function resolvePlayerBin(onLog?: (msg: string) => void): Promise<string> {
   const players = ["mpv", "iina", "vlc"];
   for (const p of players) {
+    onLog?.(`Looking for ${p}...`);
     try {
       await execa("sh", ["-c", `command -v ${p}`]);
+      onLog?.(`Found ${p}!`);
       return p;
     } catch {
+      onLog?.(`${p} not found.`);
       continue;
     }
   }
   
   if (process.platform === "darwin") {
+    onLog?.(`Looking for IINA.app...`);
     try {
       await execa("sh", ["-c", 'command -v "/Applications/IINA.app/Contents/MacOS/iina-cli"']);
+      onLog?.(`Found IINA.app!`);
       return "/Applications/IINA.app/Contents/MacOS/iina-cli";
     } catch {
-      // ignore
+      onLog?.(`IINA.app not found.`);
     }
   }
   
@@ -60,15 +66,15 @@ export async function getPlayerInfo(): Promise<{ bin: string, tracks: boolean } 
     const bin = await resolvePlayerBin();
     return {
       bin: bin.includes("iina") ? "iina" : bin,
-      tracks: bin === "mpv",
+      tracks: bin === "mpv" || bin.includes("iina"),
     };
   } catch {
     return null;
   }
 }
 
-export async function launchPlayer(opts: PlayerOptions, extraArgs: string[] = []) {
-  const selectedPlayer = await resolvePlayerBin();
+export async function launchPlayer(opts: PlayerOptions, extraArgs: string[] = [], onLog?: (msg: string) => void) {
+  const selectedPlayer = await resolvePlayerBin(onLog);
   const mediaTitle = `${opts.title} Episode ${opts.episodeNo}`;
   let args: string[] = [];
 
@@ -102,17 +108,22 @@ export async function launchPlayer(opts: PlayerOptions, extraArgs: string[] = []
 
   const cp = execa(selectedPlayer, args, { detached: true, stdio: "ignore" });
   cp.unref();
-  return cp;
+  return { cp };
 }
 
 export async function playWithTracking(opts: PlayTrackingOptions): Promise<PlayTrackingResult> {
-  const selectedPlayer = await resolvePlayerBin();
+  const selectedPlayer = await resolvePlayerBin(opts.onLog);
 
+  opts.onLog?.("Searching stream provider for anime...");
   const anime = await findHianimeAnime(opts.query);
   if (!anime) throw new PlayerError("Anime not found on stream provider");
+  
+  opts.onLog?.("Fetching episodes...");
   const eps = await hianimeEpisodes(anime.id);
   const targetEp = eps.find(e => e.epNo === String(opts.episode));
   if (!targetEp) throw new PlayerError(`Episode ${opts.episode} not found`);
+  
+  opts.onLog?.("Extracting stream URL...");
   const streamInfo = await hianimeGetStreamUrl(targetEp.dataId, "sub");
 
   const playerOpts: PlayerOptions = {
@@ -123,19 +134,32 @@ export async function playWithTracking(opts: PlayTrackingOptions): Promise<PlayT
     episodeNo: String(opts.episode),
   };
 
-  if (selectedPlayer !== "mpv") {
-    await launchPlayer(playerOpts);
+  opts.onLog?.(`Preparing to launch ${selectedPlayer.includes('iina') ? 'iina' : selectedPlayer}...`);
+
+  // We now enable IPC tracking for IINA as well
+  if (selectedPlayer !== "mpv" && !selectedPlayer.includes("iina")) {
+    opts.onLog?.("Player does not support IPC tracking. Launching without tracking.");
+    await launchPlayer(playerOpts, [], opts.onLog);
     return { pos: 0, dur: 0, finished: false };
   }
 
-  const sockPath = path.join(os.tmpdir(), `mpv-lynn-${Date.now()}-${Math.random().toString(36).slice(2)}.sock`);
-  const extraArgs: string[] = [`--input-ipc-server=${sockPath}`];
+  const sockPath = path.join("/tmp", `lynn-mpv-${Date.now()}.sock`);
+  const extraArgs: string[] = [];
+  
+  if (selectedPlayer.includes("iina")) {
+    extraArgs.push(`--mpv-input-ipc-server=${sockPath}`);
+  } else {
+    extraArgs.push(`--input-ipc-server=${sockPath}`);
+  }
   
   if (opts.startAt !== undefined && opts.startAt > 5) {
-    extraArgs.push(`--start=${Math.floor(opts.startAt)}`);
+    extraArgs.push(selectedPlayer.includes("iina") ? `--mpv-start=${Math.floor(opts.startAt)}` : `--start=${Math.floor(opts.startAt)}`);
   }
 
-  await launchPlayer(playerOpts, extraArgs);
+  opts.onLog?.("Starting player process...");
+  const { cp } = await launchPlayer(playerOpts, extraArgs, opts.onLog);
+  
+  opts.onLog?.(`Waiting for IPC socket connection at ${sockPath}...`);
 
   let socket: net.Socket | null = null;
   let pos = 0;
@@ -143,7 +167,13 @@ export async function playWithTracking(opts: PlayTrackingOptions): Promise<PlayT
 
   try {
     let connected = false;
-    for (let i = 0; i < 20; i++) {
+    
+    // Check if the process exited early
+    let processExited = false;
+    cp.on("exit", () => { processExited = true; });
+    
+    for (let i = 0; i < 30; i++) {
+      if (processExited) break;
       try {
         await fs.access(sockPath);
         socket = net.connect(sockPath);
@@ -159,8 +189,14 @@ export async function playWithTracking(opts: PlayTrackingOptions): Promise<PlayT
     }
 
     if (!connected || !socket) {
+      if (processExited) {
+        opts.onLog?.("Player exited before socket could connect. Tracking disabled for this session.");
+        return { pos: 0, dur: 0, finished: false };
+      }
       throw new PlayerError("Timeout waiting for MPV IPC socket");
     }
+    
+    opts.onLog?.("IPC Connected! Tracking progress...");
 
     socket.write(JSON.stringify({ command: ["observe_property", 1, "time-pos"] }) + "\n");
     socket.write(JSON.stringify({ command: ["observe_property", 2, "duration"] }) + "\n");

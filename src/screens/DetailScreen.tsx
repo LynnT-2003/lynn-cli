@@ -217,12 +217,13 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
         
         setPlaying(true);
         setWatchResult(null);
-        setPlayStatus(`playing ep ${p.ep} in video player... close the player to save progress`);
+        setPlayStatus(`preparing ep ${p.ep}...`);
         
         playWithTracking({
           query: p.title,
           episode: p.ep,
-          startAt: useRes ? p.pos : 0
+          startAt: useRes ? p.pos : 0,
+          onLog: setPlayStatus
         }).then(({ pos, dur, finished }) => {
           setPlaying(false);
           db.watch.getEntry(anime.id).then(entry => { entryRef.current = entry; });
