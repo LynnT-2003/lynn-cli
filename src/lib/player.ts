@@ -55,6 +55,18 @@ async function resolvePlayerBin(): Promise<string> {
   throw new PlayerError("No player found (mpv, vlc, iina). Please install one.");
 }
 
+export async function getPlayerInfo(): Promise<{ bin: string, tracks: boolean } | null> {
+  try {
+    const bin = await resolvePlayerBin();
+    return {
+      bin: bin.includes("iina") ? "iina" : bin,
+      tracks: bin === "mpv",
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function launchPlayer(opts: PlayerOptions, extraArgs: string[] = []) {
   const selectedPlayer = await resolvePlayerBin();
   const mediaTitle = `${opts.title} Episode ${opts.episodeNo}`;

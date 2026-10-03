@@ -9,7 +9,7 @@ import {
 } from "../lib/anilist.js";
 import { Thumbnail } from "../components/Thumbnail.js";
 import { useLayout } from "../lib/useLayout.js";
-import { playWithTracking } from "../lib/player.js";
+import { playWithTracking, getPlayerInfo } from "../lib/player.js";
 import { type WatchEntry, type Playlist } from "../db/schema.js";
 import { db } from "../db/index.js";
 import { theme } from "../lib/theme.js";
@@ -97,6 +97,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
   const [creatingPlaylist, setCreatingPlaylist] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [playlistFocusIdx, setPlaylistFocusIdx] = useState(0);
+  const [playerInfo, setPlayerInfo] = useState<{ bin: string, tracks: boolean } | null>(null);
 
   useEffect(() => {
     db.watch.getEntry(anime.id).then(entry => {
@@ -124,6 +125,8 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
     fetchAnimeDetail(anime.id)
       .then(setDetail)
       .catch(() => setError("not-found"));
+      
+    getPlayerInfo().then(setPlayerInfo);
   }, [anime.id]);
 
   const links = useMemo(() => {
