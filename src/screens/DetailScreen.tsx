@@ -294,11 +294,12 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
     }
 
     if (key.downArrow) {
-      if (focus.type === 'episodes') {
-        setFocus({ type: 'desc', index: 0 });
-      } else if (focus.type === 'desc') {
+      if (focus.type === 'desc') {
+        setFocus({ type: 'episodes', index: 0 });
+      } else if (focus.type === 'episodes') {
         if (relations.length) setFocus({ type: 'relation', index: 0 });
         else if (links.length) setFocus({ type: 'link', index: 0 });
+        else if (similar.length) setFocus({ type: 'similar', index: 0 });
       } else if (focus.type === 'relation') {
         if (focus.index < relations.length - 1) setFocus({ type: 'relation', index: focus.index + 1 });
         else if (links.length) setFocus({ type: 'link', index: 0 });
@@ -310,18 +311,18 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
     }
 
     if (key.upArrow) {
-      if (focus.type === 'desc') {
-        setFocus({ type: 'episodes', index: 0 });
+      if (focus.type === 'episodes') {
+        setFocus({ type: 'desc', index: 0 });
       } else if (focus.type === 'relation') {
         if (focus.index > 0) setFocus({ type: 'relation', index: focus.index - 1 });
-        else setFocus({ type: 'desc', index: 0 });
+        else setFocus({ type: 'episodes', index: 0 });
       } else if (focus.type === 'link') {
         if (relations.length) setFocus({ type: 'relation', index: relations.length - 1 });
-        else setFocus({ type: 'desc', index: 0 });
+        else setFocus({ type: 'episodes', index: 0 });
       } else if (focus.type === 'similar') {
         if (links.length) setFocus({ type: 'link', index: Math.min(focus.index, links.length - 1) });
         else if (relations.length) setFocus({ type: 'relation', index: relations.length - 1 });
-        else setFocus({ type: 'desc', index: 0 });
+        else setFocus({ type: 'episodes', index: 0 });
       }
       return;
     }
