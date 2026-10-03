@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { Thumbnail } from "../components/Thumbnail.js";
 import { db } from "../db/index.js";
 import { theme } from "../lib/theme.js";
 import type { Profile, WatchEntry, Playlist } from "../db/schema.js";
@@ -128,7 +129,23 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
     }
 
     if (key.leftArrow) {
+      if (activeSection === "watching") {
+        if (selectedWatchingIdx > 0) {
+          setSelectedWatchingIdx(prev => prev - 1);
+          return;
+        }
+      }
       if (onFocusSidebar) onFocusSidebar();
+      return;
+    }
+    
+    if (key.rightArrow) {
+      if (activeSection === "watching") {
+        if (selectedWatchingIdx < Math.min(watching.length, 3) - 1) {
+          setSelectedWatchingIdx(prev => prev + 1);
+          return;
+        }
+      }
       return;
     }
 
@@ -190,19 +207,49 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
       <Box marginBottom={2} borderStyle="single" borderColor={activeSection === "watching" ? theme.border.focus : theme.border.default} padding={1}>
         <Box flexDirection="column">
           <Text color={theme.text.highlight} bold>CONTINUE WATCHING</Text>
-          <Box marginTop={1} flexDirection="column">
+          <Box marginTop={1} flexDirection="row" overflow="hidden">
             {watching.length === 0 ? <Text dimColor>Nothing yet.</Text> : null}
-            {watching.slice(0, 5).map((w, i) => {
+            {watching.slice(0, 3).map((w, i) => {
               const isFocused = activeSection === "watching" && selectedWatchingIdx === i;
+              
+              const m = Math.floor(w.positionSeconds / 60);
+              const s = Math.floor(w.positionSeconds % 60).toString().padStart(2, '0');
+              const dM = Math.floor(w.durationSeconds / 60);
+              const dS = Math.floor(w.durationSeconds % 60).toString().padStart(2, '0');
+              
+              const pct = w.durationSeconds ? Math.min(100, Math.floor((w.positionSeconds / w.durationSeconds) * 100)) : 0;
+              const barLen = 14;
+              const filled = Math.floor((pct / 100) * barLen);
+              const barStr = "█".repeat(filled) + "▒".repeat(barLen - filled);
+              
               return (
-                <Text key={w.anilistId} color={isFocused ? "white" : "gray"} backgroundColor={isFocused ? "#444" : undefined}>
-                  <Text color={isFocused ? theme.text.accent : "gray"}>› </Text>
-                  {w.title} - <Text dimColor>Ep {w.resumeEpisode ?? (w.lastEpisode + 1)}</Text>
-                  {openingAnime && isFocused && <Text color="yellow"> (Loading...)</Text>}
-                </Text>
+                <Box 
+                  key={w.anilistId} 
+                  flexDirection="column" 
+                  marginRight={2}
+                  borderStyle="single"
+                  borderColor={isFocused ? theme.border.focus : theme.border.default}
+                  paddingX={1}
+                  paddingY={0}
+                  width={24}
+                >
+                  <Box alignSelf="center" marginBottom={1}>
+                    <Thumbnail url={w.cover || null} cols={20} rows={10} />
+                  </Box>
+                  <Box height={2} overflow="hidden">
+                    <Text color={isFocused ? "white" : "gray"} bold>{w.title}</Text>
+                  </Box>
+                  <Box marginTop={1} flexDirection="row" justifyContent="space-between">
+                    <Text color={theme.text.accent}>Ep {w.resumeEpisode ?? (w.lastEpisode + 1)}</Text>
+                    <Text dimColor>{m}:{s}</Text>
+                  </Box>
+                  <Box marginTop={1}>
+                    <Text color={isFocused ? "cyan" : "gray"}>{barStr}</Text>
+                  </Box>
+                  {openingAnime && isFocused && <Box marginTop={1}><Text color="yellow">Loading...</Text></Box>}
+                </Box>
               );
             })}
-            {watching.length > 5 && <Text dimColor>+ {watching.length - 5} more</Text>}
           </Box>
         </Box>
       </Box>

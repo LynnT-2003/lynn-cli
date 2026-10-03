@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Box, Text, useInput } from "ink";
+import { Thumbnail } from "../components/Thumbnail.js";
 import Spinner from "ink-spinner";
 import { theme } from "../lib/theme.js";
 import type { Playlist } from "../db/schema.js";
@@ -41,6 +42,38 @@ type Props = {
   onBack: () => void;
   isFocused?: boolean;
 };
+
+
+function PlaylistCover({ items }: { items: AnilistAnime[] }) {
+  if (items.length === 0) {
+    return (
+      <Box width={22} height={12} borderStyle="single" borderColor={theme.border.default} justifyContent="center" alignItems="center">
+        <Text dimColor>EMPTY</Text>
+      </Box>
+    );
+  }
+  
+  if (items.length < 4) {
+    return (
+      <Box width={22} height={12} borderStyle="single" borderColor={theme.border.default}>
+         <Thumbnail url={items[0].coverImage.large} cols={20} rows={10} />
+      </Box>
+    );
+  }
+  
+  return (
+    <Box width={22} height={12} borderStyle="single" borderColor={theme.border.default} flexDirection="column">
+      <Box flexDirection="row">
+        <Thumbnail url={items[0].coverImage.large} cols={10} rows={5} />
+        <Thumbnail url={items[1].coverImage.large} cols={10} rows={5} />
+      </Box>
+      <Box flexDirection="row">
+        <Thumbnail url={items[2].coverImage.large} cols={10} rows={5} />
+        <Thumbnail url={items[3].coverImage.large} cols={10} rows={5} />
+      </Box>
+    </Box>
+  );
+}
 
 export function PlaylistScreen({ playlist, onSelect, onBack, isFocused = true }: Props) {
   const [items, setItems] = useState<AnilistAnime[]>([]);
@@ -102,8 +135,13 @@ export function PlaylistScreen({ playlist, onSelect, onBack, isFocused = true }:
 
   return (
     <Box flexDirection="column" flexGrow={1} backgroundColor={theme.bg.black} padding={2}>
-      <Box marginBottom={1}>
-        <Text color={theme.text.highlight} bold>PLAYLIST: {playlist.name}</Text>
+      <Box flexDirection="row" marginBottom={2}>
+        <PlaylistCover items={items} />
+        <Box flexDirection="column" paddingLeft={2} justifyContent="flex-end">
+          <Text dimColor>PLAYLIST</Text>
+          <Text color={theme.text.highlight} bold>{playlist.name}</Text>
+          <Text dimColor>{items.length} items</Text>
+        </Box>
       </Box>
 
       {loading ? (
