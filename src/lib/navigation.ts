@@ -7,9 +7,10 @@ export type Screen =
   | { kind: "profile" }
   | { kind: "search" }
   | { kind: "search-grid"; query: string }
-  | { kind: "playlist"; playlist: import('../db/schema.js').Playlist };
+  | { kind: "playlist"; playlist: import('../db/schema.js').Playlist }
+  | { kind: "schedule" };
 
-export type TabId = "home" | "profile" | "search";
+export type TabId = "home" | "profile" | "search" | "schedule";
 
 export function useNavigation() {
   const [activeTab, setActiveTab] = useState<TabId>("home");
@@ -17,6 +18,7 @@ export function useNavigation() {
     home: [{ kind: "browse" }],
     profile: [{ kind: "profile" }],
     search: [{ kind: "search" }],
+    schedule: [{ kind: "schedule" }],
   });
 
   const currentStack = stacks[activeTab];

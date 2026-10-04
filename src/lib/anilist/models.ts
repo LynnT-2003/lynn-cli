@@ -145,3 +145,22 @@ export type SearchResponse = {
     Media: AnilistAnime | null;
   };
 };
+export type AiringSchedule = {
+  airingAt: number;
+  episode: number;
+  media: {
+    id: number;
+    title: {
+      romaji: string | null;
+      english: string | null;
+    };
+  };
+};
+
+export type ScheduleResponse = {
+  data: {
+    Page: {
+      airingSchedules: AiringSchedule[];
+    };
+  };
+};

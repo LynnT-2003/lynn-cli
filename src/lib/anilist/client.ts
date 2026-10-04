@@ -7,12 +7,15 @@ import {
   CategoriesResponse,
   DetailResponse,
   SearchResponse,
+  AiringSchedule,
+  ScheduleResponse,
 } from "./models.js";
 import {
   QUERY,
   CATEGORIES_QUERY,
   SEARCH_PAGE_QUERY,
   DETAIL_QUERY,
+  SCHEDULE_QUERY,
   buildGenresQuery,
 } from "./queries.js";
 
@@ -117,6 +120,11 @@ export class AnilistClient {
   public async fetchAnimeDetail(id: number): Promise<AnilistAnimeDetail> {
     const json = await this.fetchGraphQL<DetailResponse>(DETAIL_QUERY, { id });
     return json.data.Media;
+  }
+
+  public async fetchSchedule(start: number, end: number): Promise<AiringSchedule[]> {
+    const json = await this.fetchGraphQL<ScheduleResponse>(SCHEDULE_QUERY, { start, end });
+    return json.data.Page.airingSchedules;
   }
 }
 

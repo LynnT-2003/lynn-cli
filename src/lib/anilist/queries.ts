@@ -27,14 +27,24 @@ export const QUERY = `
 `;
 
 // one round trip, four aliased Page queries. anilist allows this natively.
-export const CATEGORIES_QUERY = `
-  query {
-    trending: Page(perPage: 15) {
-      media(sort: TRENDING_DESC, type: ANIME) { ${FIELDS} }
+export const TOP_SECTION_QUERY_PART = `
+    topAiring: Page(perPage: 5) {
+      media(sort: TRENDING_DESC, status: RELEASING, type: ANIME) { ${FIELDS} }
     }
-    popular: Page(perPage: 15) {
+    mostPopular: Page(perPage: 5) {
       media(sort: POPULARITY_DESC, type: ANIME) { ${FIELDS} }
     }
+    mostFavorite: Page(perPage: 5) {
+      media(sort: FAVOURITES_DESC, type: ANIME) { ${FIELDS} }
+    }
+    latestCompleted: Page(perPage: 5) {
+      media(sort: END_DATE_DESC, status: FINISHED, type: ANIME) { ${FIELDS} }
+    }
+`;
+
+export const CATEGORIES_QUERY = `
+  query {
+    ${TOP_SECTION_QUERY_PART}
     action: Page(perPage: 15) {
       media(genre: "Action", sort: POPULARITY_DESC, type: ANIME) { ${FIELDS} }
     }
@@ -43,6 +53,20 @@ export const CATEGORIES_QUERY = `
     }
   }
 `;
+
+export function buildGenresQuery(genres: string[]) {
+  const parts = genres.map((g, i) => `
+    g${i}: Page(perPage: 15) {
+      media(genre: "${g}", sort: POPULARITY_DESC, type: ANIME) { ${FIELDS} }
+    }
+  `);
+  return `
+    query {
+      ${TOP_SECTION_QUERY_PART}
+      ${parts.join("\n")}
+    }
+  `;
+}
 
 // paginated search — used by search overlay (page 1, perPage 5) and
 // search grid (page N, perPage 20+).
@@ -103,6 +127,24 @@ export const DETAIL_QUERY = `
       }
       recommendations(perPage: 6) {
         nodes { mediaRecommendation { id title { romaji english } format } }
+      }
+    }
+  }
+`;
+
+export const SCHEDULE_QUERY = `
+  query ($start: Int, $end: Int) {
+    Page(page: 1, perPage: 50) {
+      airingSchedules(airingAt_greater: $start, airingAt_lesser: $end, sort: TIME) {
+        airingAt
+        episode
+        media {
+          id
+          title {
+            romaji
+            english
+          }
+        }
       }
     }
   }

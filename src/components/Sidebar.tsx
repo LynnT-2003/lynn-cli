@@ -14,6 +14,7 @@ export function Sidebar({ activeTab, isFocused }: SidebarProps) {
     { id: 'home', label: 'Home', keyHint: '1' },
     { id: 'profile', label: 'Profile', keyHint: '2' },
     { id: 'search', label: 'Search', keyHint: '3' },
+    { id: 'schedule', label: 'Schedule', keyHint: '4' },
   ];
 
   return (

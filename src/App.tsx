@@ -7,6 +7,7 @@ import { SearchGridScreen } from "./screens/SearchGridScreen.js";
 import { SplashScreen } from "./screens/SplashScreen.js";
 import { OnboardingScreen } from "./screens/OnboardingScreen.js";
 import { ProfileScreen } from "./screens/ProfileScreen.js";
+import { ScheduleScreen } from "./screens/ScheduleScreen.js";
 import { db } from "./db/index.js";
 import { LayoutProvider, useLayout } from "./lib/useLayout.js";
 import { useNavigation } from "./lib/navigation.js";
@@ -32,6 +33,8 @@ function MainApp() {
       switchTab("profile");
     } else if (input === "3") {
       switchTab("search");
+    } else if (input === "4") {
+      switchTab("schedule");
     }
     
     if (sidebarFocused) {
@@ -40,9 +43,11 @@ function MainApp() {
       } else if (key.upArrow) {
         if (activeTab === "profile") switchTab("home");
         else if (activeTab === "search") switchTab("profile");
+        else if (activeTab === "schedule") switchTab("search");
       } else if (key.downArrow) {
         if (activeTab === "home") switchTab("profile");
         else if (activeTab === "profile") switchTab("search");
+        else if (activeTab === "search") switchTab("schedule");
       }
     } else if (currentScreen.kind === "browse" && !searchOverlayOpen) {
       if (input?.toLowerCase() === "s" || (key.upArrow && false)) { // the upArrow logic from BrowseScreen was 'upArrow from spotlight', we'll just handle 's' globally here
@@ -98,6 +103,13 @@ function MainApp() {
             query={currentScreen.query}
             onSelect={(anime) => push({ kind: "detail", anime })}
             onBack={pop}
+          />
+        )}
+        {currentScreen.kind === "schedule" && (
+          <ScheduleScreen
+            isFocused={!sidebarFocused}
+            onFocusSidebar={() => setSidebarFocused(true)}
+            onSelect={(anime) => push({ kind: "detail", anime })}
           />
         )}
       </Box>

@@ -52,15 +52,15 @@ function PlaylistCover({ items }: { items: AnilistAnime[] }) {
       </Box>
     );
   }
-  
+
   if (items.length < 4) {
     return (
       <Box width={22} height={12} borderStyle="single" borderColor={theme.border.default}>
-         <Thumbnail url={items[0].coverImage.large} cols={20} rows={10} />
+        <Thumbnail url={items[0].coverImage.large} cols={20} rows={10} />
       </Box>
     );
   }
-  
+
   return (
     <Box width={22} height={12} borderStyle="single" borderColor={theme.border.default} flexDirection="column">
       <Box flexDirection="row">
@@ -100,11 +100,11 @@ export function PlaylistScreen({ playlist, onSelect, onBack, isFocused = true }:
       .then(res => res.json())
       .then((data: any) => {
         if (data.errors) throw new Error(data.errors[0].message);
-        
+
         // Re-sort items to match playlist order (AniList doesn't preserve `id_in` order)
         const media: AnilistAnime[] = data.data.Page.media;
         const sorted = playlist.animeIds.map(id => media.find(m => m.id === id)).filter(Boolean) as AnilistAnime[];
-        
+
         setItems(sorted);
         setLoading(false);
       })
@@ -134,7 +134,7 @@ export function PlaylistScreen({ playlist, onSelect, onBack, isFocused = true }:
   }, { isActive: isFocused });
 
   return (
-    <Box flexDirection="column" flexGrow={1} backgroundColor={theme.bg.black} padding={2}>
+    <Box flexDirection="column" flexGrow={1} padding={2}>
       <Box flexDirection="row" marginBottom={2}>
         <PlaylistCover items={items} />
         <Box flexDirection="column" paddingLeft={2} justifyContent="flex-end">

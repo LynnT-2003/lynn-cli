@@ -23,7 +23,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
   useEffect(() => {
     const allIds = Array.from(new Set(playlists.flatMap(p => p.animeIds).slice(0, 50)));
     if (allIds.length === 0) return;
-    
+
     fetch("https://graphql.anilist.co", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -32,20 +32,20 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
         variables: { ids: allIds }
       })
     })
-    .then(r => r.json())
-    .then(data => {
-      const map: Record<number, string> = {};
-      data.data.Page.media.forEach((m: any) => {
-        map[m.id] = m.coverImage.large;
-      });
-      setPlaylistCovers(map);
-    }).catch(() => {});
+      .then(r => r.json())
+      .then(data => {
+        const map: Record<number, string> = {};
+        data.data.Page.media.forEach((m: any) => {
+          map[m.id] = m.coverImage.large;
+        });
+        setPlaylistCovers(map);
+      }).catch(() => { });
   }, [playlists]);
   const [activeSection, setActiveSection] = useState<"info" | "watching" | "playlists">("info");
-  
+
   const [editingProfile, setEditingProfile] = useState(false);
   const [editName, setEditName] = useState("");
-  
+
   const [creatingPlaylist, setCreatingPlaylist] = useState(false);
   const [playlistName, setPlaylistName] = useState("");
   const [selectedPlaylistIdx, setSelectedPlaylistIdx] = useState(0);
@@ -72,7 +72,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
       }
     }
   }, [activeSection, termRows]);
-  
+
   const [selectedWatchingIdx, setSelectedWatchingIdx] = useState(0);
   const [openingAnime, setOpeningAnime] = useState(false);
 
@@ -84,7 +84,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
 
   useInput((input, key) => {
     if (!isFocused) return;
-    
+
     if (editingProfile) {
       if (key.escape) {
         setEditingProfile(false);
@@ -106,7 +106,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
       }
       return;
     }
-    
+
     if (creatingPlaylist) {
       if (key.escape) {
         setCreatingPlaylist(false);
@@ -150,7 +150,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
       }
       return;
     }
-    
+
     if (input?.toLowerCase() === "c" && activeSection === "playlists") {
       setPlaylistName("");
       setCreatingPlaylist(true);
@@ -161,7 +161,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
       const p = playlists[selectedPlaylistIdx];
       const payload = Buffer.from(JSON.stringify({ name: p.name, animeIds: p.animeIds })).toString("base64");
       const shareStr = `lynn:playlist:${payload}`;
-      
+
       import('execa').then(({ execa }) => {
         execa("pbcopy", [], { input: shareStr }).then(() => {
           setExportMessage(`Copied to clipboard!`);
@@ -191,7 +191,7 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
       if (onFocusSidebar) onFocusSidebar();
       return;
     }
-    
+
     if (key.rightArrow) {
       if (activeSection === "watching") {
         if (selectedWatchingIdx < Math.min(watching.length, 3) - 1) {
@@ -243,135 +243,135 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
   }
 
   return (
-    <Box flexDirection="column" padding={1} flexGrow={1} backgroundColor={theme.bg.black}>
+    <Box flexDirection="column" padding={1} flexGrow={1}>
       {scrollOffset <= 0 && (
         <Box marginBottom={1} borderStyle="single" borderColor={activeSection === "info" ? theme.border.focus : theme.border.default} paddingX={1} paddingY={0} flexShrink={0}>
-        <Box flexDirection="column">
-          <Text color={theme.text.highlight} bold>YOUR PROFILE {activeSection === "info" && !editingProfile ? <Text dimColor>(Press ENTER to edit name)</Text> : ""}</Text>
-          <Box marginTop={1}>
-            <Text color={theme.text.accent}>Name: </Text>
-            {editingProfile ? (
-              <Text>{editName}<Text inverse> </Text></Text>
-            ) : (
-              <Text>{profile.name || "Anonymous"}</Text>
-            )}
+          <Box flexDirection="column">
+            <Text color={theme.text.highlight} bold>YOUR PROFILE {activeSection === "info" && !editingProfile ? <Text dimColor>(Press ENTER to edit name)</Text> : ""}</Text>
+            <Box marginTop={1}>
+              <Text color={theme.text.accent}>Name: </Text>
+              {editingProfile ? (
+                <Text>{editName}<Text inverse> </Text></Text>
+              ) : (
+                <Text>{profile.name || "Anonymous"}</Text>
+              )}
+            </Box>
+            <Box>
+              <Text color={theme.text.accent}>Genres: </Text>
+              <Text>{profile.genres.length ? profile.genres.join(", ") : "None"}</Text>
+            </Box>
+            {editingProfile && <Box marginTop={1}><Text dimColor>ENTER to save · ESC to cancel</Text></Box>}
           </Box>
-          <Box>
-            <Text color={theme.text.accent}>Genres: </Text>
-            <Text>{profile.genres.length ? profile.genres.join(", ") : "None"}</Text>
-          </Box>
-          {editingProfile && <Box marginTop={1}><Text dimColor>ENTER to save · ESC to cancel</Text></Box>}
         </Box>
-      </Box>
 
       )}
 
       {scrollOffset <= 1 && (
         <Box marginBottom={1} borderStyle="single" borderColor={activeSection === "watching" ? theme.border.focus : theme.border.default} paddingX={1} paddingY={0} flexShrink={0}>
-        <Box flexDirection="column">
-          <Text color={theme.text.highlight} bold>CONTINUE WATCHING</Text>
-          <Box marginTop={1} flexDirection="row" overflow="hidden">
-            {watching.length === 0 ? <Text dimColor>Nothing yet.</Text> : null}
-            
-            {
-              watching.slice(0, 3).map((w, i) => {
-                const isFocused = activeSection === "watching" && selectedWatchingIdx === i;
-                
-                const m = Math.floor(w.positionSeconds / 60);
-                const s = Math.floor(w.positionSeconds % 60).toString().padStart(2, '0');
-                const pct = w.durationSeconds ? Math.min(100, Math.floor((w.positionSeconds / w.durationSeconds) * 100)) : 0;
-                
-                return (
-                  <Card key={w.anilistId} isFocused={isFocused} width={24} height={17}>
-                    <Box alignSelf="center">
-                      <Thumbnail url={w.cover || null} cols={20} rows={10} />
-                    </Box>
-                    <Box height={2} overflow="hidden" marginTop={1}>
-                      <Text color={isFocused ? "white" : "gray"} bold>{w.title}</Text>
-                    </Box>
-                    <Box flexDirection="row" justifyContent="space-between">
-                      <Text color={theme.text.accent}>Ep {w.resumeEpisode ?? (w.lastEpisode + 1)}</Text>
-                      <Text dimColor>{m}:{s}</Text>
-                    </Box>
-                    <Box>
-                      <Text color={isFocused ? "cyan" : "gray"}>{"█".repeat(Math.floor((pct / 100) * 20)) + "▒".repeat(20 - Math.floor((pct / 100) * 20))}</Text>
-                    </Box>
-                    {openingAnime && isFocused && <Box><Text color="yellow">Loading...</Text></Box>}
-                  </Card>
-                );
-              })
-            }
+          <Box flexDirection="column">
+            <Text color={theme.text.highlight} bold>CONTINUE WATCHING</Text>
+            <Box marginTop={1} flexDirection="row" overflow="hidden">
+              {watching.length === 0 ? <Text dimColor>Nothing yet.</Text> : null}
+
+              {
+                watching.slice(0, 3).map((w, i) => {
+                  const isFocused = activeSection === "watching" && selectedWatchingIdx === i;
+
+                  const m = Math.floor(w.positionSeconds / 60);
+                  const s = Math.floor(w.positionSeconds % 60).toString().padStart(2, '0');
+                  const pct = w.durationSeconds ? Math.min(100, Math.floor((w.positionSeconds / w.durationSeconds) * 100)) : 0;
+
+                  return (
+                    <Card key={w.anilistId} isFocused={isFocused} width={24} height={17}>
+                      <Box alignSelf="center">
+                        <Thumbnail url={w.cover || null} cols={20} rows={10} />
+                      </Box>
+                      <Box height={2} overflow="hidden" marginTop={1}>
+                        <Text color={isFocused ? "white" : "gray"} bold>{w.title}</Text>
+                      </Box>
+                      <Box flexDirection="row" justifyContent="space-between">
+                        <Text color={theme.text.accent}>Ep {w.resumeEpisode ?? (w.lastEpisode + 1)}</Text>
+                        <Text dimColor>{m}:{s}</Text>
+                      </Box>
+                      <Box>
+                        <Text color={isFocused ? "cyan" : "gray"}>{"█".repeat(Math.floor((pct / 100) * 20)) + "▒".repeat(20 - Math.floor((pct / 100) * 20))}</Text>
+                      </Box>
+                      {openingAnime && isFocused && <Box><Text color="yellow">Loading...</Text></Box>}
+                    </Card>
+                  );
+                })
+              }
+            </Box>
           </Box>
         </Box>
-      </Box>
 
       )}
 
       {scrollOffset <= 2 && (
         <Box borderStyle="single" borderColor={activeSection === "playlists" ? theme.border.focus : theme.border.default} paddingX={1} paddingY={0} flexShrink={0}>
-        <Box flexDirection="column">
-          <Text color={theme.text.highlight} bold>PLAYLISTS</Text>
-          <Box marginTop={1} flexDirection="row" overflow="hidden">
-            {playlists.length === 0 && !creatingPlaylist ? <Text dimColor>No playlists created.</Text> : null}
-            
-            {
-              playlists.slice(0, 3).map((p, i) => {
-                const isFocused = activeSection === "playlists" && selectedPlaylistIdx === i;
-                const covers = p.animeIds.map(id => playlistCovers[id]).filter(Boolean);
-                
-                return (
-                  <Card key={p.id} isFocused={isFocused} width={24} height={16}>
-                    <Box alignSelf="center" width={20} height={10} flexDirection="column">
-                      {covers.length === 0 ? (
-                         <Box flexGrow={1} borderStyle="single" borderColor={theme.border.default} justifyContent="center" alignItems="center">
-                           <Text dimColor>EMPTY</Text>
-                         </Box>
-                      ) : covers.length < 4 ? (
-                         <Thumbnail url={covers[0] || null} cols={20} rows={10} />
-                      ) : (
-                         <Box flexDirection="column">
-                           <Box flexDirection="row">
-                             <Thumbnail url={covers[0] || null} cols={10} rows={5} />
-                             <Thumbnail url={covers[1] || null} cols={10} rows={5} />
-                           </Box>
-                           <Box flexDirection="row">
-                             <Thumbnail url={covers[2] || null} cols={10} rows={5} />
-                             <Thumbnail url={covers[3] || null} cols={10} rows={5} />
-                           </Box>
-                         </Box>
-                      )}
-                    </Box>
-                    <Box height={2} overflow="hidden" marginTop={1}>
-                      <Text color={isFocused ? "white" : "gray"} bold>{p.name}</Text>
-                    </Box>
-                    <Box>
-                      <Text dimColor>{p.animeIds.length} items</Text>
-                    </Box>
-                  </Card>
-                );
-              })
-            }
+          <Box flexDirection="column">
+            <Text color={theme.text.highlight} bold>PLAYLISTS</Text>
+            <Box marginTop={1} flexDirection="row" overflow="hidden">
+              {playlists.length === 0 && !creatingPlaylist ? <Text dimColor>No playlists created.</Text> : null}
 
+              {
+                playlists.slice(0, 3).map((p, i) => {
+                  const isFocused = activeSection === "playlists" && selectedPlaylistIdx === i;
+                  const covers = p.animeIds.map(id => playlistCovers[id]).filter(Boolean);
+
+                  return (
+                    <Card key={p.id} isFocused={isFocused} width={24} height={16}>
+                      <Box alignSelf="center" width={20} height={10} flexDirection="column">
+                        {covers.length === 0 ? (
+                          <Box flexGrow={1} borderStyle="single" borderColor={theme.border.default} justifyContent="center" alignItems="center">
+                            <Text dimColor>EMPTY</Text>
+                          </Box>
+                        ) : covers.length < 4 ? (
+                          <Thumbnail url={covers[0] || null} cols={20} rows={10} />
+                        ) : (
+                          <Box flexDirection="column">
+                            <Box flexDirection="row">
+                              <Thumbnail url={covers[0] || null} cols={10} rows={5} />
+                              <Thumbnail url={covers[1] || null} cols={10} rows={5} />
+                            </Box>
+                            <Box flexDirection="row">
+                              <Thumbnail url={covers[2] || null} cols={10} rows={5} />
+                              <Thumbnail url={covers[3] || null} cols={10} rows={5} />
+                            </Box>
+                          </Box>
+                        )}
+                      </Box>
+                      <Box height={2} overflow="hidden" marginTop={1}>
+                        <Text color={isFocused ? "white" : "gray"} bold>{p.name}</Text>
+                      </Box>
+                      <Box>
+                        <Text dimColor>{p.animeIds.length} items</Text>
+                      </Box>
+                    </Card>
+                  );
+                })
+              }
+
+            </Box>
+
+            {exportMessage && activeSection === "playlists" && (
+              <Box marginTop={1}>
+                <Text color="greenBright">{exportMessage}</Text>
+              </Box>
+            )}
+
+            {creatingPlaylist && (
+              <Box marginTop={1} flexDirection="column">
+                <Text color={theme.text.accent}>New Playlist Name:</Text>
+                <Text>{playlistName}<Text inverse> </Text></Text>
+                <Text dimColor>ENTER to create · ESC to cancel</Text>
+              </Box>
+            )}
           </Box>
-
-          {exportMessage && activeSection === "playlists" && (
-            <Box marginTop={1}>
-              <Text color="greenBright">{exportMessage}</Text>
-            </Box>
-          )}
-
-          {creatingPlaylist && (
-            <Box marginTop={1} flexDirection="column">
-              <Text color={theme.text.accent}>New Playlist Name:</Text>
-              <Text>{playlistName}<Text inverse> </Text></Text>
-              <Text dimColor>ENTER to create · ESC to cancel</Text>
-            </Box>
-          )}
         </Box>
-      </Box>
-      
+
       )}
-      
+
       <Box marginTop={1} flexShrink={0}>
         <Text dimColor>↑↓ select · ← sidebar {activeSection === "playlists" ? "· c create · s share" : ""}</Text>
       </Box>

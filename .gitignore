@@ -134,3 +134,5 @@ curl_firefox*
 curl_safari*
 curl_edge*
 curl-impersonate*
+
+package.sh
