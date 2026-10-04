@@ -34,7 +34,9 @@ export function ScheduleScreen({ isFocused, onFocusSidebar, onSelect }: Props) {
     }).catch(() => setSchedule([]));
   }, [dayOffset]);
 
-  const listVisibleCount = Math.max(1, termRows - 10);
+  // The header and days row take up about 10 rows. 
+  // Each schedule list item is 4 rows tall (paddingTop 1 + text 1 + paddingBottom 1 + borderBottom 1).
+  const listVisibleCount = Math.max(1, Math.floor((termRows - 10) / 4));
 
   useInput((input, key) => {
     if (!isFocused) return;
@@ -107,7 +109,7 @@ export function ScheduleScreen({ isFocused, onFocusSidebar, onSelect }: Props) {
       </Box>
 
       {/* Days row */}
-      <Box flexDirection="row" marginBottom={2} justifyContent="space-between">
+      <Box flexDirection="row" marginBottom={2} justifyContent="space-between" flexShrink={0}>
         <Text color={focusArea === "days" ? theme.text.successBright : theme.text.dim}>{"<"}</Text>
         <Box flexDirection="row" gap={1}>
           {daysToRender.map((actualOffset) => {
