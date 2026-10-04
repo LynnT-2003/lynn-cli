@@ -22,6 +22,14 @@ export type CategoryRow = {
   items: AnilistAnime[];
 };
 
+export type BrowsePageData = {
+  topAiring: AnilistAnime[];
+  mostPopular: AnilistAnime[];
+  mostFavorite: AnilistAnime[];
+  latestCompleted: AnilistAnime[];
+  rows: CategoryRow[];
+};
+
 export type SearchPageResponse = {
   data: {
     Page: {
@@ -33,8 +41,10 @@ export type SearchPageResponse = {
 
 export type CategoriesResponse = {
   data: {
-    trending: { media: AnilistAnime[] };
-    popular: { media: AnilistAnime[] };
+    topAiring: { media: AnilistAnime[] };
+    mostPopular: { media: AnilistAnime[] };
+    mostFavorite: { media: AnilistAnime[] };
+    latestCompleted: { media: AnilistAnime[] };
     action: { media: AnilistAnime[] };
     romance: { media: AnilistAnime[] };
   };

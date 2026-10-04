@@ -2,6 +2,7 @@ import {
   AnilistAnime,
   AnilistAnimeDetail,
   CategoryRow,
+  BrowsePageData,
   SearchPageResponse,
   CategoriesResponse,
   DetailResponse,
@@ -12,6 +13,7 @@ import {
   CATEGORIES_QUERY,
   SEARCH_PAGE_QUERY,
   DETAIL_QUERY,
+  buildGenresQuery,
 } from "./queries.js";
 
 const ANILIST_URL = "https://graphql.anilist.co";
@@ -75,15 +77,41 @@ export class AnilistClient {
     };
   }
 
-  public async fetchCategories(): Promise<CategoryRow[]> {
+  public async fetchCategories(): Promise<BrowsePageData> {
     const json = await this.fetchGraphQL<CategoriesResponse>(CATEGORIES_QUERY);
     const d = json.data;
-    return [
-      { label: "trending now", items: d.trending.media },
-      { label: "popular", items: d.popular.media },
-      { label: "action", items: d.action.media },
-      { label: "romance", items: d.romance.media },
-    ];
+    return {
+      topAiring: d.topAiring.media,
+      mostPopular: d.mostPopular.media,
+      mostFavorite: d.mostFavorite.media,
+      latestCompleted: d.latestCompleted.media,
+      rows: [
+        { label: "action", items: d.action.media },
+        { label: "romance", items: d.romance.media },
+      ],
+    };
+  }
+
+  public async fetchCategoriesByGenres(genres: string[]): Promise<BrowsePageData> {
+    if (!genres || genres.length === 0) {
+      return this.fetchCategories();
+    }
+    const query = buildGenresQuery(genres);
+    const json = await this.fetchGraphQL<{ data: Record<string, { media: AnilistAnime[] }> }>(query);
+    const d = json.data;
+    const rows: CategoryRow[] = [];
+    genres.forEach((g, i) => {
+      if (d[`g${i}`] && d[`g${i}`].media.length > 0) {
+        rows.push({ label: g.toLowerCase(), items: d[`g${i}`].media });
+      }
+    });
+    return {
+      topAiring: d.topAiring.media,
+      mostPopular: d.mostPopular.media,
+      mostFavorite: d.mostFavorite.media,
+      latestCompleted: d.latestCompleted.media,
+      rows,
+    };
   }
 
   public async fetchAnimeDetail(id: number): Promise<AnilistAnimeDetail> {
