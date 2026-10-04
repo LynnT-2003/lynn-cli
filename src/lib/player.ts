@@ -18,6 +18,7 @@ export type PlayTrackingOptions = {
   episode: number;
   startAt?: number;
   onLog?: (msg: string) => void;
+  onProgress?: (pos: number, dur: number, paused: boolean) => void;
 };
 
 export type PlayTrackingResult = {
@@ -164,6 +165,11 @@ export async function playWithTracking(opts: PlayTrackingOptions): Promise<PlayT
   let socket: net.Socket | null = null;
   let pos = 0;
   let dur = 0;
+  let paused = false;
+
+  const emitProgress = () => {
+    opts.onProgress?.(pos, dur, paused);
+  };
 
   try {
     let connected = false;
@@ -200,6 +206,7 @@ export async function playWithTracking(opts: PlayTrackingOptions): Promise<PlayT
 
     socket.write(JSON.stringify({ command: ["observe_property", 1, "time-pos"] }) + "\n");
     socket.write(JSON.stringify({ command: ["observe_property", 2, "duration"] }) + "\n");
+    socket.write(JSON.stringify({ command: ["observe_property", 3, "pause"] }) + "\n");
 
     let buffer = "";
     socket.on("data", (data) => {
@@ -214,8 +221,13 @@ export async function playWithTracking(opts: PlayTrackingOptions): Promise<PlayT
           if (msg.event === "property-change") {
             if (msg.name === "time-pos" && typeof msg.data === "number") {
               pos = msg.data;
+              emitProgress();
             } else if (msg.name === "duration" && typeof msg.data === "number") {
               dur = msg.data;
+              emitProgress();
+            } else if (msg.name === "pause" && typeof msg.data === "boolean") {
+              paused = msg.data;
+              emitProgress();
             }
           }
         } catch {}

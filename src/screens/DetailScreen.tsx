@@ -95,6 +95,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
   const [expandedDesc, setExpandedDesc] = useState(false);
   
   const [playing, setPlaying] = useState(false);
+  const [localPlayInfo, setLocalPlayInfo] = useState<{ pos: number; dur: number; paused: boolean } | null>(null);
   const [playStatus, setPlayStatus] = useState("");
   const [watchResult, setWatchResult] = useState<string | null>(null);
   
@@ -304,9 +305,11 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
           query: p.title,
           episode: p.ep,
           startAt: useRes ? p.pos : 0,
-          onLog: setPlayStatus
+          onLog: setPlayStatus,
+          onProgress: (pos, dur, paused) => setLocalPlayInfo({ pos, dur, paused })
         }).then(({ pos, dur, finished }) => {
           setPlaying(false);
+          setLocalPlayInfo(null);
           db.watch.getEntry(anime.id).then(entry => { entryRef.current = entry; });
           
           if (finished) {
@@ -330,6 +333,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
           }
         }).catch(err => {
           setPlaying(false);
+          setLocalPlayInfo(null);
           setWatchResult(`Error: ${err.message}`);
         });
       }
@@ -434,9 +438,11 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
           query: q,
           episode: selectedEp,
           startAt: 0,
-          onLog: setPlayStatus
+          onLog: setPlayStatus,
+          onProgress: (pos, dur, paused) => setLocalPlayInfo({ pos, dur, paused })
         }).then(({ pos, dur, finished }) => {
           setPlaying(false);
+          setLocalPlayInfo(null);
           db.watch.getEntry(anime.id).then(entry => { entryRef.current = entry; });
           
           if (finished) {
@@ -460,6 +466,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
           }
         }).catch(err => {
           setPlaying(false);
+          setLocalPlayInfo(null);
           setWatchResult(`Error: ${err.message}`);
         });
       }
