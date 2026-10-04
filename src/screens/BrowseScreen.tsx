@@ -492,7 +492,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
                 {focusedRow ? ` (${col + 1}/${items.length})` : ""}
               </Text>
 
-              <Box flexDirection="row" width="100%" justifyContent={row.label === "Continue Watching" ? "flex-start" : "space-between"}>
+              <Box flexDirection="row" width="100%" justifyContent="flex-start">
                 {visible.map((item, i) => {
                   const actualIdx = start + i;
                   const isFocused = focusedRow && actualIdx === col;
@@ -504,8 +504,8 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
                       flexDirection="column"
                       width={CARD_WIDTH + CARD_BORDER}
                       marginRight={CARD_GAP}
-                      borderStyle={isFocused ? "round" : undefined}
-                      borderColor={isFocused ? theme.border.focus : undefined}
+                      borderStyle="round"
+                      borderColor={isFocused ? theme.border.hero : "#222"}
                     >
                       <Box width={CARD_WIDTH} height={THUMB_ROWS} overflow="hidden">
                         <Thumbnail

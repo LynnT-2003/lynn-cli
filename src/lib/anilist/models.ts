@@ -10,6 +10,7 @@ export type AnilistAnime = {
   format: string | null;
   duration: number | null;
   seasonYear: number | null;
+  averageScore?: number | null;
   coverImage: {
     medium: string | null;
     large: string | null;

@@ -41,6 +41,7 @@ export function Thumbnail({ url, cols, rows, fit = "cover" }: Props) {
       <Box
         width={cols}
         height={rows}
+        flexShrink={0}
         alignItems="center"
         justifyContent="center"
       >
@@ -54,6 +55,7 @@ export function Thumbnail({ url, cols, rows, fit = "cover" }: Props) {
       <Box
         width={cols}
         height={rows}
+        flexShrink={0}
         alignItems="center"
         justifyContent="center"
       >
@@ -62,5 +64,13 @@ export function Thumbnail({ url, cols, rows, fit = "cover" }: Props) {
     );
   }
 
-  return <Text>{art}</Text>;
+  // fixed box + one truncated <Text> per line: if a parent squeezes us, lines get
+  // clipped instead of wrapping (wrapping is what produced the black stripes)
+  return (
+    <Box width={cols} height={rows} flexShrink={0} flexDirection="column" overflow="hidden">
+      {art.split("\n").map((line, i) => (
+        <Text key={i} wrap="truncate">{line}</Text>
+      ))}
+    </Box>
+  );
 }

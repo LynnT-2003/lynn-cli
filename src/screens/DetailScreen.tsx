@@ -93,12 +93,12 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
   const [focus, setFocus] = useState<FocusState>({ type: 'episodes', index: 0 });
   const entryRef = React.useRef<WatchEntry | null>(null);
   const [expandedDesc, setExpandedDesc] = useState(false);
-  
+
   const [playing, setPlaying] = useState(false);
   const [localPlayInfo, setLocalPlayInfo] = useState<{ pos: number; dur: number; paused: boolean } | null>(null);
   const [playStatus, setPlayStatus] = useState("");
   const [watchResult, setWatchResult] = useState<string | null>(null);
-  
+
   const [epPickerOpen, setEpPickerOpen] = useState(false);
   const [selectedEp, setSelectedEp] = useState(1);
   const [storeResumeEp, setStoreResumeEp] = useState<number | null>(null);
@@ -189,14 +189,14 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
       }
     });
   }, [anime.id]);
-  
+
   const activeResumeSec = (selectedEp === storeResumeEp) ? storeResumeSec : null;
 
   useEffect(() => {
     fetchAnimeDetail(anime.id)
       .then(setDetail)
       .catch(() => setError("not-found"));
-      
+
     getPlayerInfo().then(setPlayerInfo);
   }, [anime.id]);
 
@@ -240,15 +240,15 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
       if (creatingPlaylist) {
         if (key.escape) setCreatingPlaylist(false);
         else if (key.return) {
-           if (newPlaylistName.trim().length > 0) {
-             db.playlist.create(newPlaylistName.trim()).then(p => {
-               db.playlist.addAnime(p.id, anime.id).then(() => {
-                 setWatchResult(`added to new playlist '${p.name}'`);
-                 setCreatingPlaylist(false);
-                 setPlaylistPickerOpen(false);
-               });
-             });
-           }
+          if (newPlaylistName.trim().length > 0) {
+            db.playlist.create(newPlaylistName.trim()).then(p => {
+              db.playlist.addAnime(p.id, anime.id).then(() => {
+                setWatchResult(`added to new playlist '${p.name}'`);
+                setCreatingPlaylist(false);
+                setPlaylistPickerOpen(false);
+              });
+            });
+          }
         }
         else if (key.backspace || key.delete) setNewPlaylistName(prev => prev.slice(0, -1));
         else if (input && input.length === 1) setNewPlaylistName(prev => prev + input);
@@ -296,11 +296,11 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
         const useRes = focus.index === 0;
         const p = resumePrompt;
         setResumePrompt(null);
-        
+
         setPlaying(true);
         setWatchResult(null);
         setPlayStatus(`preparing ep ${p.ep}...`);
-        
+
         playWithTracking({
           query: p.title,
           episode: p.ep,
@@ -311,7 +311,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
           setPlaying(false);
           setLocalPlayInfo(null);
           db.watch.getEntry(anime.id).then(entry => { entryRef.current = entry; });
-          
+
           if (finished) {
             db.watch.markEpisodeCompleted(anime.id, p.ep);
             setWatchResult(`ep ${p.ep} completed`);
@@ -423,7 +423,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
       if (focus.type === 'episodes') {
         const q = anime.title.english || anime.title.romaji || "";
         const mEps = detail?.episodes || null;
-        
+
         if (activeResumeSec && activeResumeSec > 5) {
           setResumePrompt({ ep: selectedEp, pos: activeResumeSec, title: q, mEps });
           setFocus({ type: 'episodes', index: 0 }); // 0 = resume, 1 = restart
@@ -433,7 +433,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
         setPlaying(true);
         setWatchResult(null);
         setPlayStatus(`preparing ep ${selectedEp}...`);
-        
+
         playWithTracking({
           query: q,
           episode: selectedEp,
@@ -444,7 +444,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
           setPlaying(false);
           setLocalPlayInfo(null);
           db.watch.getEntry(anime.id).then(entry => { entryRef.current = entry; });
-          
+
           if (finished) {
             db.watch.markEpisodeCompleted(anime.id, selectedEp);
             setWatchResult(`ep ${selectedEp} completed`);
@@ -596,7 +596,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
   const visibleRelations = relations.slice(relStart, relStart + MAX_ITEMS);
 
   return (
-    <Box flexDirection="column" height="100%" overflow="hidden" backgroundColor={theme.bg.black}>
+    <Box flexDirection="column" height="100%" overflow="hidden">
       <Box
         flexDirection="column"
         borderStyle="single"
@@ -621,7 +621,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
           <Box flexDirection="column" width={44} paddingX={1} borderRight={true} borderStyle="single" borderColor={theme.border.active} borderTop={false} borderBottom={false} borderLeft={false} alignItems="center" paddingTop={1}>
             <Thumbnail url={coverUrl} cols={THUMB_COLS} rows={THUMB_ROWS} />
 
-            
+
           </Box>
 
           {/* RIGHT COLUMN */}
@@ -649,10 +649,10 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
                 <Text color={theme.text.highlight} bold>EPISODES</Text>
                 {d.episodes && <Text dimColor>{d.episodes} total</Text>}
               </Box>
-              
-              <Box 
-                flexDirection="row" 
-                flexWrap="wrap" 
+
+              <Box
+                flexDirection="row"
+                flexWrap="wrap"
                 borderStyle={isFocused('episodes') ? "round" : "single"}
                 borderColor={isFocused('episodes') ? theme.border.focus : theme.border.default}
                 paddingX={1}
@@ -663,15 +663,15 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
                   const cIdx = Math.floor((selectedEp - 1) / CHUNK_SIZE);
                   const cStart = cIdx * CHUNK_SIZE + 1;
                   const cEnd = Math.min(maxEps, cStart + CHUNK_SIZE - 1);
-                  
+
                   const eps = [];
                   for (let i = cStart; i <= cEnd; i++) {
                     const isFoc = isFocused('episodes') && selectedEp === i;
                     const isWatched = storeResumeEp ? (i < storeResumeEp) : (i <= (entryRef.current?.lastEpisode || 0));
-                    
+
                     let marker = "· ";
                     let color = "gray";
-                    
+
                     if (isFoc) {
                       marker = "▶ ";
                       color = "white";
@@ -679,14 +679,14 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
                       marker = "✓ ";
                       color = "green";
                     }
-                    
+
                     eps.push(
                       <Box key={i} marginRight={2}>
                         <Text color={color} bold={isFoc}>{marker}{i}</Text>
                       </Box>
                     );
                   }
-                  
+
                   return (
                     <Box flexDirection="column" width="100%">
                       <Box flexDirection="row" flexWrap="wrap">{eps}</Box>
@@ -823,7 +823,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
         </Box>
       </Box>
 
-            {resumePrompt && (
+      {resumePrompt && (
         <Box position="absolute" width="100%" height="100%" padding={2} flexDirection="column" justifyContent="center" alignItems="center">
           <Box width="60%" borderStyle="round" borderColor={theme.border.focus} padding={2} backgroundColor={theme.bg.black} flexDirection="column">
             <Box marginBottom={1}><Text color={theme.text.highlight} bold>RESUME EPISODE {resumePrompt.ep}?</Text></Box>
@@ -837,58 +837,58 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
         </Box>
       )}
 
-      {/* ── CAST: QR (until the phone connects, or Q to show again) ── */}
-      {castState && (castShowQr || !castInfo) && (
-        <Box position="absolute" width="100%" height="100%" padding={2} flexDirection="column" justifyContent="center" alignItems="center" backgroundColor={theme.bg.black}>
-          <Box borderStyle="double" borderColor={theme.border.focus} padding={2} flexDirection="column" alignItems="center">
-            <Text color={theme.text.highlight} bold>CAST TO PHONE</Text>
-            <Box marginTop={1} marginBottom={1} flexDirection="column" alignItems="center">
-              <Text>{castState.qr}</Text>
+      {/* ── CAST: SIDE-BY-SIDE OVERLAY ── */}
+      {castState && (
+        <Box position="absolute" width="100%" height="100%" flexDirection="column" justifyContent="center" alignItems="center">
+          <Box paddingX={3} paddingY={1} backgroundColor={theme.bg.black} flexDirection="row" marginBottom={24}>
+
+            {/* LEFT SIDE: INFO & STATUS */}
+            <Box flexDirection="column" paddingRight={4} justifyContent="center" minWidth={45}>
+              <Text color={theme.text.highlight} bold>📱 {castInfo ? `CASTING TO ${castInfo.device.toUpperCase()}` : "CAST TO PHONE"}</Text>
+
+              <Box marginTop={1}><Text bold>{anime.title.english || anime.title.romaji}</Text></Box>
+
+              <Box justifyContent="space-between" flexDirection="row">
+                <Text>Episode {castInfo ? castInfo.ep : selectedEp}{mEpsLabel(detail?.episodes)}</Text>
+                <Text color={castInfo && !castInfo.paused ? "green" : "yellow"}>
+                  {castInfo ? (castInfo.paused ? "❚❚ paused" : "▶ playing") : "◌ waiting..."}
+                </Text>
+              </Box>
+
+              {(() => {
+                const live = castInfo ? (castInfo.paused ? castInfo.pos : castInfo.pos + (Date.now() - castInfo.at) / 1000) : 0;
+                const dur = castInfo ? castInfo.dur : 0;
+                const pos = dur ? Math.min(live, dur) : live;
+                const barWidth = 32;
+                const filled = dur ? Math.round((pos / dur) * barWidth) : 0;
+                return (
+                  <Box marginTop={1}>
+                    <Text color={theme.text.highlight}>{"━".repeat(filled)}</Text>
+                    <Text dimColor>{"━".repeat(Math.max(0, barWidth - filled))}</Text>
+                    <Text>  {fmtTime(pos)} / {dur ? fmtTime(dur) : "--:--"}</Text>
+                  </Box>
+                );
+              })()}
+
+              <Box marginTop={1}>
+                {castInfo ? (
+                  <Text dimColor><Text inverse> Q </Text> QR   <Text inverse> ESC </Text> stop casting</Text>
+                ) : (
+                  <Text dimColor>scan with camera · <Text inverse> ESC </Text> cancel</Text>
+                )}
+              </Box>
             </Box>
-            <Text color="cyan">{castState.url}</Text>
-            <Box marginTop={1}>
-              {castInfo
-                ? <Text color="green">● connected: {castInfo.device}</Text>
-                : <Text color={theme.text.highlight}><Spinner type="dots" /> waiting for phone… scan with your camera (same wifi or hotspot)</Text>}
-            </Box>
-            <Box marginTop={2}>
-              <Text dimColor>
-                {castInfo && <><Text inverse> Q </Text> HIDE QR   </>}
-                <Text inverse> ESC </Text> STOP CASTING
-              </Text>
-            </Box>
+
+            {/* RIGHT SIDE: QR CODE */}
+            {(castShowQr || !castInfo) && (
+              <Box paddingLeft={4} flexDirection="column" justifyContent="center" alignItems="center">
+                <Box><Text>{castState.qr}</Text></Box>
+              </Box>
+            )}
+
           </Box>
         </Box>
       )}
-
-      {/* ── CAST: NOW PLAYING ── */}
-      {castState && castInfo && !castShowQr && (() => {
-        const live = castInfo.paused ? castInfo.pos : castInfo.pos + (Date.now() - castInfo.at) / 1000;
-        const pos = castInfo.dur ? Math.min(live, castInfo.dur) : live;
-        const barWidth = 36;
-        const filled = castInfo.dur ? Math.round((pos / castInfo.dur) * barWidth) : 0;
-        const title = anime.title.english || anime.title.romaji || "";
-        return (
-          <Box position="absolute" width="100%" height="100%" padding={2} flexDirection="column" justifyContent="center" alignItems="center">
-            <Box borderStyle="round" borderColor={theme.border.hero} paddingX={3} paddingY={1} backgroundColor={theme.bg.black} flexDirection="column">
-              <Text color={theme.text.highlight} bold>📱 CASTING TO {castInfo.device}</Text>
-              <Box marginTop={1}><Text bold>{title}</Text></Box>
-              <Box justifyContent="space-between">
-                <Text>Episode {castInfo.ep}{mEpsLabel(detail?.episodes)}</Text>
-                <Text color={castInfo.paused ? "yellow" : "green"}>{castInfo.dur === 0 ? "◌ loading" : castInfo.paused ? "❚❚ paused" : "▶ playing"}</Text>
-              </Box>
-              <Box marginTop={1}>
-                <Text color={theme.text.highlight}>{"━".repeat(filled)}</Text>
-                <Text dimColor>{"━".repeat(barWidth - filled)}</Text>
-                <Text>  {fmtTime(pos)} / {castInfo.dur ? fmtTime(castInfo.dur) : "--:--"}</Text>
-              </Box>
-              <Box marginTop={1}>
-                <Text dimColor>progress saves automatically · <Text inverse> Q </Text> QR · <Text inverse> ESC </Text> stop casting</Text>
-              </Box>
-            </Box>
-          </Box>
-        );
-      })()}
 
       {/* ── PLAYER SPINNER / NOW PLAYING ── */}
       {playing && (
@@ -947,7 +947,7 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
         >
           <Box flexDirection="column" borderStyle="double" borderColor={theme.border.focus} padding={2} backgroundColor={theme.bg.black}>
             <Text color={theme.text.highlight} bold>Add to Playlist</Text>
-            
+
             <Box marginTop={1} flexDirection="column">
               {playlists.map((p, i) => {
                 const isFocused = playlistFocusIdx === i;
@@ -958,21 +958,21 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
                   </Text>
                 );
               })}
-              
+
               <Box marginTop={1}>
                 <Text color={playlistFocusIdx === playlists.length ? "white" : "gray"} backgroundColor={playlistFocusIdx === playlists.length ? "#444" : undefined}>
                   [+ Create New Playlist]
                 </Text>
               </Box>
             </Box>
-            
+
             {creatingPlaylist && (
               <Box marginTop={1} flexDirection="column" borderStyle="single" borderColor="cyan" padding={1}>
                 <Text color="cyan">Playlist Name:</Text>
                 <Text>{newPlaylistName}<Text inverse> </Text></Text>
               </Box>
             )}
-            
+
             <Box marginTop={2}>
               <Text dimColor>↑↓ select · ENTER toggle/create · ESC close</Text>
             </Box>

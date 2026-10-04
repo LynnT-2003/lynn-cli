@@ -1,5 +1,5 @@
 import { client } from "../client.js";
-import { WatchEntry, WatchStatus } from "../schema.js";
+import { WatchEntry, WatchStatus, HistoryEvent } from "../schema.js";
 
 export const watchRepo = {
   async getEntry(anilistId: number): Promise<WatchEntry | null> {
@@ -77,6 +77,16 @@ export const watchRepo = {
       entry.updatedAt = new Date().toISOString();
       await client.save();
     }
+  },
+
+  async all(): Promise<WatchEntry[]> {
+    const data = await client.get();
+    return Object.values(data.entries);
+  },
+
+  async history(): Promise<HistoryEvent[]> {
+    const data = await client.get();
+    return [...data.history];
   },
 
   async continueWatching(): Promise<WatchEntry[]> {
