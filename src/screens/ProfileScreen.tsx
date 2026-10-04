@@ -224,7 +224,11 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
   return (
     <Box flexDirection="column" padding={1} flexGrow={1}>
       {scrollOffset <= 0 && (
-        <Box marginBottom={1} flexDirection="column" flexShrink={0}>
+        <Box 
+          marginBottom={2} 
+          flexDirection="column" 
+          flexShrink={0}
+        >
           <Text color={activeSection === "info" ? theme.text.successBright : theme.text.highlight} bold>
             {activeSection === "info" ? "▶ " : "  "}YOUR PROFILE {activeSection === "info" && !editingProfile ? <Text dimColor>(Press ENTER to edit name)</Text> : ""}
           </Text>
@@ -247,7 +251,11 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
       )}
 
       {scrollOffset <= 1 && (
-        <Box marginBottom={1} flexDirection="column" flexShrink={0}>
+        <Box 
+          marginBottom={2} 
+          flexDirection="column" 
+          flexShrink={0}
+        >
           <Text color={activeSection === "watching" ? theme.text.successBright : theme.text.highlight} bold>
             {activeSection === "watching" ? "▶ " : "  "}CONTINUE WATCHING
           </Text>
@@ -287,7 +295,11 @@ export function ProfileScreen({ isFocused = true, onFocusSidebar, onOpenPlaylist
       )}
 
       {scrollOffset <= 2 && (
-        <Box marginBottom={1} flexDirection="column" flexShrink={0}>
+        <Box 
+          marginBottom={2} 
+          flexDirection="column" 
+          flexShrink={0}
+        >
           <Text color={activeSection === "playlists" ? theme.text.successBright : theme.text.highlight} bold>
             {activeSection === "playlists" ? "▶ " : "  "}PLAYLISTS
           </Text>
