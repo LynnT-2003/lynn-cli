@@ -1,43 +1,141 @@
 import React, { useEffect, useState } from "react";
-import { Box } from "ink";
+import { Box, useInput, Text } from "ink";
 import { BrowseScreen } from "./screens/BrowseScreen.js";
 import { DetailScreen } from "./screens/DetailScreen.js";
 import { SearchOverlay } from "./screens/SearchOverlay.js";
 import { SearchGridScreen } from "./screens/SearchGridScreen.js";
-import { EpisodePickerOverlay } from "./screens/EpisodePickerOverlay.js";
 import { SplashScreen } from "./screens/SplashScreen.js";
-import type { AnilistAnime } from "./lib/anilist.js";
-import { useTerminalSize } from "./lib/useTerminalSize.js";
+import { OnboardingScreen } from "./screens/OnboardingScreen.js";
+import { ProfileScreen } from "./screens/ProfileScreen.js";
+import { db } from "./db/index.js";
+import { LayoutProvider, useLayout } from "./lib/useLayout.js";
+import { useNavigation } from "./lib/navigation.js";
+import { Sidebar } from "./components/Sidebar.js";
 
-export type Screen =
-  | { type: "splash" }
-  | { type: "browse" }
-  | { type: "search-overlay" }
-  | { type: "search-grid"; query: string }
-  | { type: "detail"; anime: AnilistAnime }
-  | { type: "player"; anime: AnilistAnime };
+import { PlaylistScreen } from "./screens/PlaylistScreen.js";
+
+function MainApp() {
+  const { activeTab, currentScreen, push, pop, switchTab } = useNavigation();
+  const { rows: termRows } = useLayout();
+  const [sidebarFocused, setSidebarFocused] = useState(false);
+  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
+
+  // Global key handling for tab switching
+  // NOTE: Ink uses a global input listener. Since we don't have text inputs yet,
+  // this is safe. If we add text inputs later (e.g. for search), we must ensure 
+  // this doesn't conflict by conditionally disabling it or scoping priorities.
+  useInput((input, key) => {
+    // Only process tab switches on numeric keys
+    if (input === "1") {
+      switchTab("home");
+    } else if (input === "2") {
+      switchTab("profile");
+    } else if (input === "3") {
+      switchTab("search");
+    }
+    
+    if (sidebarFocused) {
+      if (key.rightArrow || key.return) {
+        setSidebarFocused(false);
+      } else if (key.upArrow) {
+        if (activeTab === "profile") switchTab("home");
+        else if (activeTab === "search") switchTab("profile");
+      } else if (key.downArrow) {
+        if (activeTab === "home") switchTab("profile");
+        else if (activeTab === "profile") switchTab("search");
+      }
+    } else if (currentScreen.kind === "browse" && !searchOverlayOpen) {
+      if (input?.toLowerCase() === "s" || (key.upArrow && false)) { // the upArrow logic from BrowseScreen was 'upArrow from spotlight', we'll just handle 's' globally here
+        setSearchOverlayOpen(true);
+      }
+    }
+  }, { isActive: true });
+
+  return (
+    <Box flexDirection="row" width="100%" height={termRows} overflow="hidden">
+      <Sidebar activeTab={activeTab} isFocused={sidebarFocused} />
+      <Box flexDirection="column" flexGrow={1} overflow="hidden">
+        {currentScreen.kind === "browse" && (
+          <BrowseScreen
+            onSelect={(anime) => push({ kind: "detail", anime })}
+            isFocused={!sidebarFocused}
+            onFocusSidebar={() => setSidebarFocused(true)}
+          />
+        )}
+        {currentScreen.kind === "detail" && (
+          <DetailScreen
+            anime={currentScreen.anime}
+            isActive={!sidebarFocused}
+            onBack={pop}
+            onNavigate={(newAnime) => push({ kind: "detail", anime: newAnime })}
+            onFocusSidebar={() => setSidebarFocused(true)}
+          />
+        )}
+        {currentScreen.kind === "profile" && (
+          <ProfileScreen 
+            isFocused={!sidebarFocused}
+            onFocusSidebar={() => setSidebarFocused(true)}
+            onOpenPlaylist={(playlist) => push({ kind: "playlist", playlist })}
+            onOpenAnime={(anime) => push({ kind: "detail", anime })}
+          />
+        )}
+        {currentScreen.kind === "playlist" && (
+          <PlaylistScreen 
+            playlist={currentScreen.playlist}
+            onSelect={(anime) => push({ kind: "detail", anime })}
+            onBack={pop}
+            isFocused={!sidebarFocused}
+          />
+        )}
+        {currentScreen.kind === "search" && (
+          <Box padding={2}>
+            <Text color="yellowBright" bold>SEARCH</Text>
+            <Box marginTop={1}><Text>Press 's' anywhere to open the instant search overlay.</Text></Box>
+          </Box>
+        )}
+        {currentScreen.kind === "search-grid" && (
+          <SearchGridScreen
+            query={currentScreen.query}
+            onSelect={(anime) => push({ kind: "detail", anime })}
+            onBack={pop}
+          />
+        )}
+      </Box>
+
+      {searchOverlayOpen && (
+        <Box position="absolute" width="100%" height="100%">
+          <SearchOverlay
+            onSelectAnime={(anime) => {
+              setSearchOverlayOpen(false);
+              push({ kind: "detail", anime });
+            }}
+            onCommitQuery={(query) => {
+              setSearchOverlayOpen(false);
+              push({ kind: "search-grid", query });
+            }}
+            onClose={() => setSearchOverlayOpen(false)}
+          />
+        </Box>
+      )}
+    </Box>
+  );
+}
 
 export function App() {
-  const [stack, setStack] = useState<Screen[]>([{ type: "splash" }]);
+  const [showSplash, setShowSplash] = useState(true);
   const [ready, setReady] = useState(false);
-  const current = stack[stack.length - 1]!;
-  const { rows: termRows } = useTerminalSize();
-
-  const push = (screen: Screen) => setStack((s) => [...s, screen]);
-  const pop = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
-  // esc from search-grid goes straight to browse, not back to overlay
-  const popToBrowse = () => setStack([{ type: "browse" }]);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
-    // enter alt-screen + hide cursor (same trick vim/htop/claude code use)
     process.stdout.write("\x1B[?1049h");
     process.stdout.write("\x1B[?25l");
     
-    // Force a re-render now that we are on the alt screen
-    setReady(true);
+    db.profile.get().then(p => {
+      setNeedsOnboarding(!p.onboarded);
+      setReady(true);
+    });
 
     return () => {
-      // always restore the user's real terminal on exit, even on crash
       process.stdout.write("\x1B[?25h");
       process.stdout.write("\x1B[?1049l");
     };
@@ -47,69 +145,23 @@ export function App() {
     return null;
   }
 
-  // browse is always mounted underneath; overlay renders on top when active
-  const showBrowse =
-    current.type === "browse" || current.type === "search-overlay";
-
-  if (current.type === "splash") {
-    return <SplashScreen onContinue={() => setStack([{ type: "browse" }])} />;
+  if (showSplash) {
+    return <SplashScreen onContinue={() => setShowSplash(false)} />;
   }
 
-  if (current.type === "detail" || current.type === "player") {
-    const detailScreens = stack.filter((s) => s.type === "detail") as Extract<Screen, { type: "detail" }>[];
-    
+  if (needsOnboarding) {
     return (
-      <Box flexDirection="column" height={termRows} overflow="hidden">
-        {detailScreens.map((s, i) => {
-          const isTop = i === detailScreens.length - 1;
-          const isActive = isTop && current.type !== "player";
-          return (
-            <Box key={i} position={i > 0 ? "absolute" : "relative"} width="100%" height="100%">
-              <DetailScreen 
-                anime={s.anime} 
-                isActive={isActive}
-                onBack={pop} 
-                onWatch={() => push({ type: "player", anime: s.anime })} 
-                onNavigate={(newAnime) => push({ type: "detail", anime: newAnime })}
-              />
-            </Box>
-          );
-        })}
-        {current.type === "player" && (
-          <EpisodePickerOverlay 
-            anime={current.anime} 
-            onClose={pop} 
-          />
-        )}
-      </Box>
+      <OnboardingScreen onComplete={(name, genres) => {
+        db.profile.completeOnboarding(name, genres, []).then(() => {
+          setNeedsOnboarding(false);
+        });
+      }} />
     );
   }
 
-  if (current.type === "search-grid") {
-    return (
-      <SearchGridScreen
-        query={current.query}
-        onSelect={(anime) => push({ type: "detail", anime })}
-        onBack={popToBrowse}
-      />
-    );
-  }
-
-  // browse (possibly with overlay on top)
   return (
-    <Box flexDirection="column" height={termRows} overflow="hidden">
-      <BrowseScreen
-        onSelect={(anime) => push({ type: "detail", anime })}
-        onSearch={() => push({ type: "search-overlay" })}
-        isFocused={current.type === "browse"}
-      />
-      {current.type === "search-overlay" && (
-        <SearchOverlay
-          onSelectAnime={(anime) => push({ type: "detail", anime })}
-          onCommitQuery={(query) => push({ type: "search-grid", query })}
-          onClose={pop}
-        />
-      )}
-    </Box>
+    <LayoutProvider>
+      <MainApp />
+    </LayoutProvider>
   );
 }

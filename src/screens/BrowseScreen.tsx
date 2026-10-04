@@ -7,7 +7,9 @@ import {
   type CategoryRow,
 } from "../lib/anilist.js";
 import { Thumbnail } from "../components/Thumbnail.js";
-import { useTerminalSize } from "../lib/useTerminalSize.js";
+import { useLayout } from "../lib/useLayout.js";
+import { db } from "../db/index.js";
+import { theme } from "../lib/theme.js";
 
 // anime covers are roughly 2:3 (w:h). raw pixel height is rows*2 (half-block
 // trick), so cols:rows*2 should stay close to 2:3 or the crop looks wrong.
@@ -25,13 +27,13 @@ const CHROME_LINES = 3 + 16; // 1 padding-top + 1 header text + 1 padding-bottom
 
 type Props = {
   onSelect: (anime: AnilistAnime) => void;
-  onSearch: () => void;
   isFocused: boolean;
+  onFocusSidebar?: () => void;
 };
 
-export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
+export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
   const { exit } = useApp();
-  const { columns, rows: termRows } = useTerminalSize();
+  const { contentColumns: columns, rows: termRows } = useLayout();
 
   const [rows, setRows] = useState<CategoryRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,13 +44,86 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
   const [colByRow, setColByRow] = useState<number[]>([]);
 
   useEffect(() => {
-    fetchCategories()
-      .then((data) => {
-        setRows(data);
-        setColByRow(data.map(() => 0));
+    Promise.all([fetchCategories(), db.watch.continueWatching()])
+      .then(([data, cw]) => {
+        let initialRows = data;
+        if (cw.length > 0) {
+          initialRows = [{
+            label: "Continue Watching",
+            items: cw.map(c => {
+              const m = Math.floor(c.positionSeconds / 60);
+              const s = Math.floor(c.positionSeconds % 60).toString().padStart(2, '0');
+              const subtext = c.positionSeconds > 0 ? `ep ${c.resumeEpisode} · ${m}:${s}` : `ep ${c.resumeEpisode}`;
+              return {
+                id: c.anilistId,
+                title: { english: c.title, romaji: c.title },
+                episodes: c.totalEpisodes,
+                status: null,
+                description: subtext,
+                format: null,
+                duration: null,
+                seasonYear: null,
+                coverImage: { medium: c.cover, large: c.cover },
+                bannerImage: null
+              } as AnilistAnime;
+            })
+          }, ...data];
+        }
+        setRows(initialRows);
+        setColByRow(initialRows.map(() => 0));
       })
       .catch((e: Error) => setError(e.message));
   }, []);
+
+  useEffect(() => {
+    if (!rows) return;
+    if (isFocused) {
+      db.watch.continueWatching().then(cw => {
+      let cwRow: CategoryRow | null = null;
+      if (cw.length > 0) {
+        cwRow = {
+          label: "Continue Watching",
+          items: cw.map(c => {
+             const m = Math.floor(c.positionSeconds / 60);
+             const s = Math.floor(c.positionSeconds % 60).toString().padStart(2, '0');
+             const subtext = c.positionSeconds > 0 ? `ep ${c.resumeEpisode} · ${m}:${s}` : `ep ${c.resumeEpisode}`;
+             return {
+               id: c.anilistId,
+               title: { english: c.title, romaji: c.title },
+               episodes: c.totalEpisodes,
+               status: null,
+               description: subtext,
+               format: null,
+               duration: null,
+               seasonYear: null,
+               coverImage: { medium: c.cover, large: c.cover },
+               bannerImage: null
+             } as AnilistAnime;
+          })
+        };
+      }
+      
+      setRows(prev => {
+        if (!prev) return prev;
+        const hasCw = prev[0]?.label === "Continue Watching";
+        if (cwRow && !hasCw) {
+          setFocusRow(r => r >= 0 ? r + 1 : r);
+          setColByRow(c => [0, ...c]);
+          return [cwRow, ...prev];
+        } else if (!cwRow && hasCw) {
+          setFocusRow(r => Math.max(-1, r - 1));
+          setColByRow(c => c.slice(1));
+          return prev.slice(1);
+        } else if (cwRow && hasCw) {
+          const next = [...prev];
+          next[0] = cwRow;
+          return next;
+        }
+        return prev;
+      });
+      });
+    }
+  }, [isFocused]);
 
   const maxVisibleRows = Math.max(1, Math.ceil((termRows - CHROME_LINES) / ROW_HEIGHT));
 
@@ -71,21 +146,17 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
     }
     if (!rows) return;
 
-    if (input === "s") {
-      onSearch();
-      return;
-    }
-
-    const spotlightItems = rows[0]?.items ?? []; // Use trending for spotlight
+    const spotlightItems = rows.find(r => r.label !== "Continue Watching")?.items ?? []; // Use trending for spotlight
 
     if (focusRow === -1) {
       // Hero Carousel is focused
       if (key.upArrow) {
-        onSearch();
+        // Do nothing, already at top
       } else if (key.downArrow) {
         setFocusRow(0);
       } else if (key.leftArrow) {
-        setSpotlightIndex((prev) => Math.max(0, prev - 1));
+        if (spotlightIndex === 0) onFocusSidebar?.();
+        else setSpotlightIndex((prev) => Math.max(0, prev - 1));
       } else if (key.rightArrow) {
         setSpotlightIndex((prev) => Math.min(spotlightItems.length - 1, prev + 1));
       } else if (key.return) {
@@ -103,11 +174,15 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
     } else if (key.downArrow) {
       setFocusRow((r) => Math.min(rows.length - 1, r + 1));
     } else if (key.leftArrow) {
-      setColByRow((prev) => {
-        const next = [...prev];
-        next[focusRow] = Math.max(0, currentCol - 1);
-        return next;
-      });
+      if (currentCol === 0) {
+        onFocusSidebar?.();
+      } else {
+        setColByRow((prev) => {
+          const next = [...prev];
+          next[focusRow] = Math.max(0, currentCol - 1);
+          return next;
+        });
+      }
     } else if (key.rightArrow) {
       setColByRow((prev) => {
         const next = [...prev];
@@ -121,13 +196,13 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
   }, { isActive: isFocused });
 
   if (error) {
-    return <Text color="red">✗ {error}</Text>;
+    return <Text color={theme.text.error}>✗ {error}</Text>;
   }
 
   if (!rows) {
     return (
       <Box>
-        <Text color="cyan">
+        <Text color={theme.text.accent}>
           <Spinner type="dots" />
         </Text>
         <Text> loading catalogue...</Text>
@@ -136,7 +211,7 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
   }
 
   const visibleRows = rows.slice(scrollOffset, scrollOffset + maxVisibleRows);
-  const spotlightItems = rows[0]?.items ?? [];
+  const spotlightItems = rows.find(r => r.label !== "Continue Watching")?.items ?? [];
   const heroAnime = spotlightItems[spotlightIndex];
   const isHeroFocused = focusRow === -1;
 
@@ -146,35 +221,35 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
   return (
     <Box flexDirection="column" padding={1}>
       <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
-        <Text bold color="cyan">aniwatch-cli</Text>
-        <Text dimColor>s to search, arrows to move, enter to select</Text>
+        <Text bold color={theme.text.accent}>landing-page coming soon</Text>
+        <Text color={theme.text.dim}>arrows to move, enter to select, 1-3 tabs</Text>
       </Box>
 
       {/* SPOTLIGHT HERO BANNER */}
       {heroAnime && (
-        <Box flexDirection="row" height={15} marginBottom={1} overflow="hidden" borderStyle="round" borderColor={isHeroFocused ? "yellow" : "gray"}>
+        <Box flexDirection="row" height={15} marginBottom={1} overflow="hidden" borderStyle="round" borderColor={isHeroFocused ? theme.border.hero : theme.border.default}>
           {/* LEFT: INFO */}
           <Box flexDirection="column" width={leftWidth} paddingRight={2} justifyContent="center" paddingLeft={1}>
-            <Text color="yellowBright" bold>#{spotlightIndex + 1} Spotlight</Text>
+            <Text color={theme.text.highlightBright} bold>#{spotlightIndex + 1} Spotlight</Text>
             <Box marginY={1} overflow="hidden" height={1}>
-              <Text bold color="white" wrap="truncate">{heroAnime.title.english ?? heroAnime.title.romaji}</Text>
+              <Text bold color={theme.text.normal} wrap="truncate">{heroAnime.title.english ?? heroAnime.title.romaji}</Text>
             </Box>
             
             <Box flexDirection="row" marginBottom={1}>
-              <Text color="gray">▶ {heroAnime.format ?? "TV"} • {heroAnime.duration ? `${heroAnime.duration}m` : "?m"} • {heroAnime.seasonYear ?? ""}  </Text>
-              <Text backgroundColor="green" color="black"> HD </Text>
+              <Text color={theme.text.dim}>▶ {heroAnime.format ?? "TV"} • {heroAnime.duration ? `${heroAnime.duration}m` : "?m"} • {heroAnime.seasonYear ?? ""}  </Text>
+              <Text backgroundColor={theme.bg.focus} color={theme.bg.black}> HD </Text>
               <Text>  </Text>
-              <Text backgroundColor="white" color="black"> EP {heroAnime.episodes ?? "?"} </Text>
+              <Text backgroundColor={theme.bg.inverse} color={theme.bg.black}> EP {heroAnime.episodes ?? "?"} </Text>
             </Box>
             
             <Box height={2} overflow="hidden">
-              <Text color="gray" wrap="wrap">{heroAnime.description?.replace(/<[^>]+>/g, "").trim()}</Text>
+              <Text color={theme.text.dim} wrap="wrap">{heroAnime.description?.replace(/<[^>]+>/g, "").trim()}</Text>
             </Box>
             
             <Box flexDirection="row" marginTop={1}>
-              <Text backgroundColor={isHeroFocused ? "yellow" : "gray"} color="black" bold> ▶ Watch Now </Text>
+              <Text backgroundColor={isHeroFocused ? theme.bg.highlight : theme.bg.active} color={theme.bg.black} bold> ▶ Watch Now </Text>
               <Text>   </Text>
-              <Text backgroundColor="gray" color="black"> Detail {'>'} </Text>
+              <Text backgroundColor={theme.bg.active} color={theme.bg.black}> Detail {'>'} </Text>
             </Box>
           </Box>
           
@@ -203,13 +278,13 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
 
         return (
           <Box key={row.label} flexDirection="column" marginTop={1}>
-            <Text bold color={focusedRow ? "greenBright" : "white"}>
+            <Text bold color={focusedRow ? theme.text.successBright : theme.text.normal}>
               {focusedRow ? "▶ " : "  "}
               {row.label}
               {focusedRow ? ` (${col + 1}/${items.length})` : ""}
             </Text>
 
-            <Box flexDirection="row" width="100%" justifyContent="space-between">
+            <Box flexDirection="row" width="100%" justifyContent={row.label === "Continue Watching" ? "flex-start" : "space-between"}>
               {visible.map((item, i) => {
                 const actualIdx = start + i;
                 const isFocused = focusedRow && actualIdx === col;
@@ -222,7 +297,7 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
                     width={CARD_WIDTH + CARD_BORDER}
                     marginRight={CARD_GAP}
                     borderStyle={isFocused ? "round" : undefined}
-                    borderColor={isFocused ? "green" : undefined}
+                    borderColor={isFocused ? theme.border.focus : undefined}
                   >
                     <Box width={CARD_WIDTH} height={THUMB_ROWS} overflow="hidden">
                       <Thumbnail
@@ -231,8 +306,11 @@ export function BrowseScreen({ onSelect, onSearch, isFocused }: Props) {
                         rows={THUMB_ROWS}
                       />
                     </Box>
-                    <Box width={CARD_WIDTH} overflow="hidden">
-                      <Text wrap="truncate-end">{title}</Text>
+                    <Box width={CARD_WIDTH} overflow="hidden" flexDirection="column">
+                      <Text wrap="truncate-end" bold={isFocused} color={isFocused ? theme.text.successBright : theme.text.normal}>{title}</Text>
+                      {row.label === "Continue Watching" && (
+                        <Text dimColor>{item.description}</Text>
+                      )}
                     </Box>
                   </Box>
                 );

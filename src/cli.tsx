@@ -4,6 +4,7 @@ import { render } from "ink";
 import { Command } from "commander";
 import { AnimeTest } from "./screens/AnimeTest.js";
 import { App } from "./App.js";
+import { db } from "./db/index.js";
 
 // bare `lynn-cli` with no subcommand jumps straight into the full-screen
 // browse experience - no "run browse first" step, matches the claude-code
@@ -31,6 +32,76 @@ if (rawArgs.length === 0) {
     .description("same as running lynn-cli with no arguments")
     .action(() => {
       render(<App />);
+    });
+
+  program
+    .command("export")
+    .description("export watch progress and playlists")
+    .action(async () => {
+      const cw = await db.watch.continueWatching();
+      const playlists = await db.playlist.list();
+      
+      console.log("\n== WATCHING ==");
+      if (cw.length === 0) {
+        console.log("No continue watching data.");
+      } else {
+        for (const c of cw) {
+          const m = Math.floor(c.positionSeconds / 60);
+          const s = Math.floor(c.positionSeconds % 60).toString().padStart(2, '0');
+          console.log(`- ${c.title} (Ep ${c.resumeEpisode || c.lastEpisode + 1} at ${m}:${s})`);
+        }
+      }
+      
+      console.log("\n== PLAYLISTS ==");
+      if (playlists.length === 0) {
+        console.log("No playlists.");
+      } else {
+        for (const p of playlists) {
+          console.log(`\n[${p.name}]`);
+          if (p.animeIds.length === 0) {
+            console.log("  (empty)");
+          } else {
+            for (const id of p.animeIds) {
+              const entry = await db.watch.getEntry(id);
+              console.log(`  - ${entry ? entry.title : `Anilist ID: ${id}`}`);
+            }
+          }
+        }
+      }
+      console.log("");
+    });
+
+  program
+    .command("import <payload>")
+    .description("import a shared playlist (starts with lynn:playlist:)")
+    .action(async (payload: string) => {
+      try {
+        if (!payload.startsWith("lynn:playlist:")) {
+          console.error("Invalid playlist payload.");
+          process.exit(1);
+        }
+        const b64 = payload.split(":")[2];
+        if (!b64) {
+          console.error("Missing base64 data.");
+          process.exit(1);
+        }
+        const decoded = Buffer.from(b64, "base64").toString("utf-8");
+        const data = JSON.parse(decoded);
+        
+        if (!data.name || !Array.isArray(data.animeIds)) {
+          console.error("Malformed playlist data.");
+          process.exit(1);
+        }
+        
+        const p = await db.playlist.create(data.name);
+        for (const id of data.animeIds) {
+          await db.playlist.addAnime(p.id, id);
+        }
+        
+        console.log(`Successfully imported playlist '${p.name}' with ${data.animeIds.length} items!`);
+      } catch (err) {
+        console.error("Failed to import playlist:", err);
+      }
     });
 
   program.parseAsync(process.argv);

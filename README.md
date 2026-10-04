@@ -70,6 +70,9 @@ Or run `npm link` once inside the folder. After that, `lynn-cli` starts it from 
 | 🗣️ **Sub *and* dub** | Press <kbd>m</kbd> in the episode picker to switch modes. English subtitles are attached to the player automatically. |
 | 🛡️ **No `curl-impersonate`** | Requests use Chrome-like TLS fingerprints from inside Node, so there are no prebuilt C binaries or bash wrappers to install. |
 | 🚀 **Plays natively** | The stream is handed to your local player as a detached process with the correct referrer, title and subtitle track. No ads and no browser. |
+| 📱 **Cast to your phone** | Press <kbd>c</kbd> and scan the QR code. The episode plays in Safari or Chrome on your phone, over Wi-Fi or an iPhone hotspot, while the terminal shows what's playing. |
+| 💾 **Progress Tracking** | MPV's IPC socket is monitored to automatically save your exact watch position and episode when you close the player. Jump right back in where you left off from your Profile screen! |
+| 📑 **Playlists & Sharing** | Create and manage custom playlists. Export them as base64 strings and share them with friends to import using `lynn-cli import <string>`. |
 
 ---
 
@@ -126,13 +129,20 @@ Selecting a relation or a recommendation opens its detail page, and you can keep
 | **Search** | *type* | Live results |
 | | <kbd>↑</kbd> <kbd>↓</kbd> · <kbd>Enter</kbd> | Choose a result or open the full grid |
 | | <kbd>Esc</kbd> | Close |
+| **Profile** | <kbd>Enter</kbd> | Edit Name / Create Playlist |
+| | <kbd>s</kbd> | Share focused playlist |
+| | <kbd>c</kbd> | Create new playlist |
 | **Detail** | <kbd>w</kbd> | Watch now |
+| | <kbd>p</kbd> | Add to / Remove from Playlist |
+| | <kbd>c</kbd> | Cast to your phone |
 | | Arrow keys · <kbd>Enter</kbd> | Expand the synopsis, jump to a relation or recommendation, or open a link |
 | | <kbd>b</kbd> / <kbd>Esc</kbd> / <kbd>Backspace</kbd> | Back |
 | **Episodes** | <kbd>↑</kbd> <kbd>↓</kbd> or <kbd>j</kbd> <kbd>k</kbd> | Choose an episode |
 | | <kbd>m</kbd> | Switch between sub and dub |
 | | <kbd>Enter</kbd> | Resolve the stream and launch the player |
 | | <kbd>Esc</kbd> | Close |
+| **Casting** | <kbd>q</kbd> | Show / hide the QR code |
+| | <kbd>Esc</kbd> | Stop casting |
 
 ---
 
@@ -144,6 +154,8 @@ Selecting a relation or a recommendation opens its detail page, and you can keep
 > 3. [Cloudflare bypass](#3-cloudflare-bypass)
 > 4. [AniList metadata](#4-anilist-metadata)
 > 5. [Player handoff](#5-player-handoff)
+> 6. [Cast to phone](#6-cast-to-phone): [network topology](#61-network-topology) · [session lifecycle](#62-session-lifecycle) · [HLS proxy](#63-the-hls-proxy-hot-path) · [phone ↔ terminal sync](#64-phone--terminal-sync)
+> 7. [Local library & playlists](#7-local-library--playlists)
 
 ---
 
@@ -360,7 +372,188 @@ LYNN checks for a player with `command -v`, in the order **IINA → mpv → VLC*
 | mpv | `--referrer=` | `--sub-file=` | `--force-media-title=` |
 | VLC | `--http-referrer=` | `:input-slave=` | `--meta-title=` |
 
+LYNN now also features **Watch Tracking**, actively monitoring playback through Unix IPC sockets.
+
+```mermaid
+flowchart LR
+    A[LYNN CLI] -- "Launch" --> B((Player))
+    B -. "Create Socket" .-> C[/"/tmp/lynn-mpv-‹timestamp›.sock"/]
+    A -- "IPC connect()" --> C
+    C -- "time-pos & duration" --> A
+    A -- "Save" --> D[(library.json)]
+```
+
+If the player supports IPC (`mpv` natively, or `IINA` via `--mpv-input-ipc-server`), LYNN actively streams playback events. If you watch past 90% of an episode, or stop within its last 90 seconds, it's marked as complete, and the next episode will be automatically queued up in the UI.
+
 ---
+
+### 6. Cast to phone
+
+> **Source:** [`src/lib/castServer.ts`](src/lib/castServer.ts) · **UI:** [`src/screens/DetailScreen.tsx`](src/screens/DetailScreen.tsx)
+
+Press <kbd>c</kbd> on any show and scan the QR code. The episode plays in your phone's browser, with no app to install. The laptop runs a small HTTP server that stands between the phone and the video CDN. The phone never contacts HiAnime or the CDN directly; it only talks to your laptop over the local network. This works on home Wi-Fi and on an **iPhone Personal Hotspot**, in both Safari and Chrome.
+
+#### 6.1 Network topology
+
+```mermaid
+flowchart LR
+    subgraph LAN["📶 Local network (Wi-Fi or iPhone hotspot, e.g. 172.20.10.0/28)"]
+        PH["📱 Phone<br/>Safari / Chrome<br/>172.20.10.1"]
+        subgraph MAC["💻 Laptop · en0 172.20.10.2"]
+            CS["Cast server<br/>0.0.0.0 : random port"]
+            TUI["LYNN TUI"]
+        end
+    end
+    subgraph NET["🌐 Internet"]
+        HA["hianime.at<br/>+ ZokoAnime embed"]
+        CDN[("HLS CDN<br/>playlists + .ts segments")]
+    end
+    PH -- "HTTP/1.1 · page, playlists, segments, subs" --> CS
+    PH -- "progress pings" --> CS
+    CS -- "events" --> TUI
+    CS -- "Chrome-fingerprinted TLS + Referer" --> HA
+    CS -- "HTTP/2 + Referer" --> CDN
+    VPN["utun* VPN tunnel<br/>Tailscale / WARP"] -. "ignored when choosing the LAN IP" .- MAC
+```
+
+**Choosing the address for the QR code:** the server lists every IPv4 interface on the laptop. It skips VPN tunnels (`utun*`, `tun*`, `ipsec*`, `bridge*`, `awdl*`, and the `100.64.0.0/10` range that Tailscale uses), because the phone can't reach those. From what's left, it prefers the iPhone hotspot subnet `172.20.10.x`, then any private range (`10.x`, `172.16–31.x`, `192.168.x`). The server listens on `0.0.0.0` on a random free port.
+
+#### 6.2 Session lifecycle
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor You
+    participant TUI as LYNN TUI
+    participant CS as Cast server (laptop)
+    participant PH as Phone browser
+    participant SRC as HiAnime + CDN
+
+    You->>TUI: press c on a show
+    TUI->>CS: startCastServer(title, anilistId, ep, total, onEvent)
+    CS->>SRC: search + episode list (see section 2)
+    CS->>SRC: prefetch hls.js once (served locally afterwards)
+    CS->>CS: pick LAN IP · listen 0.0.0.0 on a random port
+    CS-->>TUI: url
+    TUI->>TUI: render QR code · waiting for phone
+
+    You->>PH: scan QR
+    PH->>CS: GET /
+    CS-->>PH: player page (video, Prev / Next)
+    CS-)TUI: event connected(device)
+    TUI->>TUI: swap QR for the now-playing panel
+
+    PH->>CS: POST /episode { episode }
+    CS->>SRC: resolve stream (servers, embed, XOR, master.m3u8)
+    CS-)TUI: event episode(n)
+    CS-->>PH: { url: /playlist.m3u8?ep=n, subUrl: /subs.vtt?ep=n, isLast }
+
+    Note over PH,SRC: Video plays through the proxy (see 6.3)
+
+    loop every 5 s while playing, and on play / pause / seek
+        PH->>CS: POST /progress { episode, pos, dur, paused }
+        CS->>CS: save to library.json
+        CS-)TUI: event progress
+        TUI->>TUI: move progress bar · update episode marks
+    end
+
+    PH->>CS: POST /complete { episode } (when the video ends)
+    CS-)TUI: event complete(n)
+    PH->>CS: POST /episode { n + 1 } (auto-advance unless it was the last one)
+
+    alt You press ESC
+        TUI->>CS: stop()
+        TUI->>TUI: show saved position
+    else No activity for 15 min
+        CS-)TUI: event stopped(idle)
+    end
+```
+
+#### 6.3 The HLS proxy (hot path)
+
+The phone's player (AVPlayer on iOS, through the `<video>` element) only ever requests URLs on the laptop. Every playlist the server returns has its URI lines rewritten to point back at `/seg`, so all requests keep going through the proxy.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant V as Phone video element
+    participant CS as Cast server
+    participant CDN as HLS CDN (HTTP/2)
+
+    V->>CS: GET /playlist.m3u8?ep=n
+    CS->>CDN: GET master.m3u8 (Referer: embed origin)
+    CDN-->>CS: 360p / 720p / 1080p variant URIs
+    CS->>CS: rewrite each URI to /seg?u=URL&referer=REF
+    CS-->>V: master playlist (application/vnd.apple.mpegurl)
+
+    V->>CS: GET /seg?u=…/720/index.m3u8
+    CS->>CDN: GET variant playlist (Referer)
+    CDN-->>CS: EXTINF list of seg_00000.ts.jpg …
+    CS->>CS: rewrite each segment to /seg?u=…
+    CS-->>V: media playlist
+
+    loop every segment (about 2–15 s of video each)
+        V->>CS: GET /seg?u=…/seg_00042.ts.jpg
+        CS->>CDN: stream GET (Referer, decompress off)
+        CDN-->>CS: 200 · video/mp2t · headers include :status
+        CS->>CS: keep only content-type + content-length
+        CS-->>V: piped bytes (MPEG-TS)
+    end
+
+    Note over V,CS: If the phone seeks or closes the tab, the upstream request is aborted
+```
+
+**Why the phone can't fetch the CDN itself**
+
+| Problem | What the proxy does |
+|---|---|
+| The CDN rejects requests that don't carry the embed's `Referer`, and a browser `<video>` element can't set one | The server adds `Referer` to every upstream request |
+| Segments are disguised as images (`seg_00000.ts.jpg`) | They're passed through as raw bytes with the CDN's `video/mp2t` type, and `video/mp2t` is used if none is given |
+| The CDN answers over **HTTP/2**, so its headers include pseudo-headers like `:status`, which Node's HTTP/1 `writeHead` rejects with `ERR_INVALID_HTTP_TOKEN` | Only `content-type` and `content-length` are forwarded, and with `decompress: false` the length always matches the bytes |
+| HiAnime and the CDN are behind Cloudflare | The server uses the same Chrome-fingerprinted `got-scraping` client as the scraper (section 3) |
+| Chrome needs `hls.js`, and a hotspot connection may be slow or offline | `hls.js` is downloaded once when casting starts and served from `/hls.js`. iOS plays HLS natively anyway |
+| Relative URIs inside playlists | Rebased onto the upstream playlist's directory before rewriting |
+
+#### 6.4 Phone ↔ terminal sync
+
+The server reports what the phone is doing through an `onEvent` callback. The terminal then shows the same kind of status panel as local playback, instead of leaving a QR code on screen.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Starting: press c
+    Starting --> WaitingForPhone: server listening, QR shown
+    Starting --> [*]: error (shown under the episode list)
+    WaitingForPhone --> NowPlaying: connected
+    NowPlaying --> NowPlaying: episode · progress · complete
+    NowPlaying --> QR: Q
+    QR --> NowPlaying: Q
+    WaitingForPhone --> [*]: ESC
+    NowPlaying --> [*]: ESC (shows saved position)
+    NowPlaying --> [*]: 15 min idle
+```
+
+| Phone does | Route | Event | Terminal shows |
+|---|---|---|---|
+| Opens the page | `GET /` | `connected` | QR replaced by **📱 CASTING TO ‹device›** |
+| Picks or auto-advances an episode | `POST /episode` | `episode` | Episode number, ◌ loading, episode list cursor moves |
+| Plays, pauses or seeks | `POST /progress` | `progress` | ▶ / ❚❚, progress bar and `mm:ss / mm:ss`, which keeps advancing between pings while playing |
+| Finishes an episode | `POST /complete` | `complete` | ✓ mark in the episode list, "ep N completed on phone" |
+| Nothing for 15 min | — | `stopped` | Panel closes, "cast ended after 15 min idle" |
+
+Progress is saved to the same library as local playback, so you can start an episode on your phone and finish it in mpv on the laptop.
+
+---
+
+### 7. Local library & playlists
+
+> **Source:** [`src/db/`](src/db)
+
+Progress, watch history, your profile and playlists are kept in a single JSON file at `~/.local/share/lynn-cli/library.json` (or under `$XDG_DATA_HOME` if it's set). Writes go to a temporary file first and are then renamed into place, so a crash never leaves a half-written library. Local playback and casting both save to this same file.
+
+Playlists can be shared as a `lynn:playlist:…` base64 string and imported with `lynn-cli import <string>`.
+
+---
+
 ## 🩺 Troubleshooting
 
 | Symptom | Fix |
@@ -370,6 +563,9 @@ LYNN checks for a player with `command -v`, in the order **IINA → mpv → VLC*
 | `No ZokoAnime server found for mode dub` | That episode has no dub. Press <kbd>m</kbd> to switch back to sub. |
 | Wrong show plays | The AniList → HiAnime title match picked a near-duplicate, which happens most often with sequels and specials. Please open an issue with the title. |
 | Cover art looks blocky or broken | Use a terminal with true-colour support (iTerm2, WezTerm, Kitty, Windows Terminal, Ghostty), and make the window bigger. |
+| Phone can't open the cast link | Make sure the phone and laptop are on the same Wi-Fi, or the laptop is joined to the phone's hotspot. If a VPN with an exit node is on (Tailscale, WARP), allow **local network access** in its settings. |
+| Cast page loads in Safari but not in Chrome (iOS) | iPhone Settings → Chrome → turn on **Local Network**. |
+| Cast page loads but the video never starts | Update to the latest version. Older builds forwarded HTTP/2 headers and sent empty video segments. |
 | `Cannot find module dist/cli.js` | Run `npm run build` first, then `npm start`. |
 
 ---
