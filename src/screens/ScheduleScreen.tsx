@@ -34,9 +34,9 @@ export function ScheduleScreen({ isFocused, onFocusSidebar, onSelect }: Props) {
     }).catch(() => setSchedule([]));
   }, [dayOffset]);
 
-  // The header and days row take up about 10 rows. 
-  // Each schedule list item is 4 rows tall (paddingTop 1 + text 1 + paddingBottom 1 + borderBottom 1).
-  const listVisibleCount = Math.max(1, Math.floor((termRows - 10) / 4));
+  // The header, margins, and container paddings take up exactly 13-14 rows. 
+  // Each schedule list item is exactly 4 rows tall (paddingTop 1 + text 1 + paddingBottom 1 + borderBottom 1).
+  const listVisibleCount = Math.max(1, Math.floor((termRows - 14) / 4));
 
   useInput((input, key) => {
     if (!isFocused) return;
@@ -160,12 +160,13 @@ export function ScheduleScreen({ isFocused, onFocusSidebar, onSelect }: Props) {
                 borderRight={false}
                 borderColor={isSelected ? theme.border.focus : theme.border.default}
                 alignItems="center"
+                flexShrink={0}
               >
                 <Box width={12}>
                   <Text color={isSelected ? theme.text.successBright : theme.text.dim}>{time}</Text>
                 </Box>
-                <Box flexGrow={1}>
-                  <Text bold color={isSelected ? theme.text.successBright : theme.text.normal}>
+                <Box flexGrow={1} overflow="hidden">
+                  <Text bold color={isSelected ? theme.text.successBright : theme.text.normal} wrap="truncate-end">
                     {isSelected ? "▶ " : "  "}{item.media.title.english || item.media.title.romaji}
                   </Text>
                 </Box>
