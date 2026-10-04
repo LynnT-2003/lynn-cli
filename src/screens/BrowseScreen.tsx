@@ -32,6 +32,14 @@ type Props = {
   onFocusSidebar?: () => void;
 };
 
+let cachedRows: CategoryRow[] | null = null;
+let cachedTopSection: {
+  topAiring: AnilistAnime[];
+  mostPopular: AnilistAnime[];
+  mostFavorite: AnilistAnime[];
+  latestCompleted: AnilistAnime[];
+} | null = null;
+
 export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
   const { exit } = useApp();
   const { contentColumns: columns, rows: termRows } = useLayout();
@@ -51,7 +59,20 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
   const [scrollBlockOffset, setScrollBlockOffset] = useState(0);
   const [colByRow, setColByRow] = useState<number[]>([]);
 
-  useEffect(() => {
+  const loadData = (force = false) => {
+    if (!force && cachedRows && cachedTopSection) {
+      setRows(cachedRows);
+      setTopSection(cachedTopSection);
+      setColByRow(cachedRows.map(() => 0));
+      return;
+    }
+    
+    if (force) {
+      setRows(null);
+      cachedRows = null;
+      cachedTopSection = null;
+    }
+
     Promise.all([db.profile.get(), db.watch.continueWatching()])
       .then(([profile, cw]) => {
         return Promise.all([
@@ -83,16 +104,24 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
             })
           }, ...data.rows];
         }
-        setRows(initialRows);
-        setTopSection({
+        
+        cachedRows = initialRows;
+        cachedTopSection = {
           topAiring: data.topAiring,
           mostPopular: data.mostPopular,
           mostFavorite: data.mostFavorite,
           latestCompleted: data.latestCompleted,
-        });
+        };
+        
+        setRows(initialRows);
+        setTopSection(cachedTopSection);
         setColByRow(initialRows.map(() => 0));
       })
       .catch((e: Error) => setError(e.message));
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   useEffect(() => {
@@ -246,6 +275,10 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
       exit();
       return;
     }
+    if (input?.toLowerCase() === 'r') {
+      loadData(true);
+      return;
+    }
     if (!rows) return;
 
     const spotlightItems = rows.find(r => r.label !== "Continue Watching")?.items ?? []; // Use trending for spotlight
@@ -345,12 +378,13 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
   }
 
   return (
-    <Box flexDirection="column" padding={1}>
-      <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
+    <Box flexDirection="column" padding={1} flexShrink={0}>
+      <Box flexDirection="row" justifyContent="space-between" marginBottom={1} flexShrink={0}>
         <Text bold color={theme.text.accent}>landing-page coming soon</Text>
-        <Text color={theme.text.dim}>arrows to move, enter to select, 1-3 tabs</Text>
+        <Text color={theme.text.dim}>arrows: move, enter: select, r: refresh</Text>
       </Box>
 
+      <Box flexDirection="column" flexShrink={0}>
       {visibleBlocks.map(block => {
         if (block.type === 'hero') {
           return (
@@ -413,8 +447,8 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
                   {col.items.slice(0, 3).map((item, rIdx) => {
                     const isFocused = focusRow === rIdx && topCol === cIdx;
                     return (
-                      <Box key={item.id} flexDirection="row" marginBottom={2}>
-                        <Box width={10} height={8} marginRight={1}>
+                      <Box key={item.id} flexDirection="row" marginBottom={2} flexShrink={0}>
+                        <Box width={10} height={8} marginRight={1} flexShrink={0}>
                           <Thumbnail url={item.coverImage.medium} cols={10} rows={8} fit="cover" />
                         </Box>
                         <Box flexDirection="column" overflow="hidden" justifyContent="center" width={textWidth}>
@@ -424,6 +458,11 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
                           <Text color={theme.text.dim} wrap="truncate-end">
                             {item.episodes ? `EP ${item.episodes}` : "??"} • {item.format ?? "TV"}
                           </Text>
+                          <Box flexDirection="row" marginTop={1}>
+                             <Text backgroundColor={theme.bg.focus} color={theme.bg.black}> HD </Text>
+                             <Text>  </Text>
+                             <Text backgroundColor={theme.bg.inverse} color={theme.bg.black}> {item.seasonYear ?? "NEW"} </Text>
+                          </Box>
                         </Box>
                       </Box>
                     );
@@ -490,6 +529,7 @@ export function BrowseScreen({ onSelect, isFocused, onFocusSidebar }: Props) {
         }
         return null;
       })}
+      </Box>
     </Box>
   );
 }
