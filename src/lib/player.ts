@@ -203,6 +203,7 @@ export async function playWithTracking(opts: PlayTrackingOptions): Promise<PlayT
     }
     
     opts.onLog?.("IPC Connected! Tracking progress...");
+    emitProgress(); // Emit immediately so UI swaps out of loading state
 
     socket.write(JSON.stringify({ command: ["observe_property", 1, "time-pos"] }) + "\n");
     socket.write(JSON.stringify({ command: ["observe_property", 2, "duration"] }) + "\n");

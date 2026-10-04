@@ -890,12 +890,36 @@ export function DetailScreen({ anime, isActive = true, onBack, onNavigate, onFoc
         );
       })()}
 
-      {/* ── PLAYER SPINNER ── */}
+      {/* ── PLAYER SPINNER / NOW PLAYING ── */}
       {playing && (
         <Box position="absolute" width="100%" height="100%" padding={2} flexDirection="column" justifyContent="center" alignItems="center">
-          <Box borderStyle="round" borderColor={theme.border.hero} padding={2} backgroundColor={theme.bg.black}>
-            <Text color={theme.text.highlight}><Spinner type="dots" /> {playStatus}</Text>
-          </Box>
+          {!localPlayInfo ? (
+            <Box borderStyle="round" borderColor={theme.border.hero} padding={2} backgroundColor={theme.bg.black}>
+              <Text color={theme.text.highlight}><Spinner type="dots" /> {playStatus}</Text>
+            </Box>
+          ) : (() => {
+            const pos = localPlayInfo.pos;
+            const dur = localPlayInfo.dur;
+            const paused = localPlayInfo.paused;
+            const barWidth = 36;
+            const filled = dur ? Math.round((pos / dur) * barWidth) : 0;
+            const title = anime.title.english || anime.title.romaji || "";
+            return (
+              <Box borderStyle="round" borderColor={theme.border.hero} paddingX={3} paddingY={1} backgroundColor={theme.bg.black} flexDirection="column">
+                <Text color={theme.text.highlight} bold>🍿 NOW PLAYING (LOCAL)</Text>
+                <Box marginTop={1}><Text bold>{title}</Text></Box>
+                <Box justifyContent="space-between">
+                  <Text>Episode {selectedEp}{mEpsLabel(detail?.episodes)}</Text>
+                  <Text color={paused ? "yellow" : "green"}>{dur === 0 ? "◌ loading" : paused ? "❚❚ paused" : "▶ playing"}</Text>
+                </Box>
+                <Box marginTop={1}>
+                  <Text color={theme.text.highlight}>{"━".repeat(filled)}</Text>
+                  <Text dimColor>{"━".repeat(barWidth - filled)}</Text>
+                  <Text>  {fmtTime(pos)} / {dur ? fmtTime(dur) : "--:--"}</Text>
+                </Box>
+              </Box>
+            );
+          })()}
         </Box>
       )}
 
